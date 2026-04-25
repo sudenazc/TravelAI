@@ -2,3 +2,11 @@
 .env
 .DS_Store
 **/.DS_Store
+
+# Python / uv
+**/.venv/
+**/__pycache__/
+**/*.pyc
+
+# Local tool installs (workspace-scoped)
+.tools/
