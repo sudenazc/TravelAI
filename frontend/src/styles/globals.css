@@ -30,6 +30,18 @@ body {
   border-radius: inherit;
 }
 
+/* ── Chat message entrance ── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ── Skeleton shimmer ── */
 @keyframes skeleton-shimmer {
   0%   { background-position: 200% 0; }
