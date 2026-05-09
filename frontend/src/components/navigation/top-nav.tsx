@@ -3,10 +3,9 @@ import { Plane } from "lucide-react";
 import { Button } from "@/components/ui";
 
 const NAV_LINKS = [
-  { label: "Discover", href: "/discover" },
   { label: "Planner", href: "/planner" },
-  { label: "Destinations", href: "/destinations" },
-  { label: "Pricing", href: "/pricing" },
+  { label: "Tickets", href: "/tickets" },
+  { label: "My Trips", href: "/my-trips" },
 ] as const;
 
 interface TopNavProps {
@@ -55,9 +54,6 @@ export function TopNav({ activePath }: TopNavProps) {
               Log in
             </Button>
           </Link>
-          <Button variant="cta" size="md" className="rounded-full px-6">
-            Get started
-          </Button>
         </div>
 
         {/* Mobile hamburger placeholder */}
