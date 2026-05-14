@@ -4,7 +4,7 @@ TravelAI - Ürün Gereksinim Dokümanı (PRD)
 
 Platform: Mobile-First Responsive Web Application
 
-Teknoloji Stack: Next.js, FastAPI, Supabase, OpenRouter (LLM)
+Teknoloji Stack: Next.js, FastAPI, Postgresql, OpenRouter (LLM)
 
 Hedef Kitle: Küresel Üniversite Öğrencileri
 
@@ -82,23 +82,12 @@ Lokal Öğrenci Aktiviteleri: Uygulamanın imzası. (Örn: "Münih Teknik Ünive
 
 Konaklama: Bölge ve fiyat bazlı en iyi öğrenci opsiyonları.
 
-5. DISCOVERY FEED (KEŞFET ALANI)
 
-Seyahat planlama dışında, öğrencilerin dünyayı tanımasını sağlayan sosyal ve içerik odaklı bir akış alanı:
-
-Ülke Tanıtımları: Ülkeler hakkında hızlı bilgiler ve "Neden gitmelisin?" içerikleri.
-
-Video Feed: Öğrencilerin seyahatlerinden ürettikleri kısa videolar (Reels formatında).
-
-Kültürel Bilgi Kartları: "USA İkiz Kuleler Hikayesi" gibi derinliği olan tarihi ve kültürel mikro-içerikler.
-
-İçerik Üretimi: Kayıtlı öğrencilerin kendi deneyimlerini post/video olarak paylaşabileceği arayüz.
-
-6. VERİTABANI TASARIMI (RELATIONAL MODEL)
+5. VERİTABANI TASARIMI (RELATIONAL MODEL)
 
 Tüm tablolarda created_at bilgisi zorunludur.
 
-6.1 Trips (Geziler)
+5.1 Trips (Geziler)
 
 id (PK)
 
@@ -116,7 +105,7 @@ visa_info (Text)
 
 created_at (Timestamp)
 
-6.2 Trip_Days (Günlük Detaylar)
+5.2 Trip_Days (Günlük Detaylar)
 
 id (PK)
 
@@ -128,7 +117,7 @@ date (Date)
 
 created_at (Timestamp)
 
-6.3 Trip_Items (Aktiviteler)
+5.3 Trip_Items (Aktiviteler)
 
 id (PK)
 
@@ -148,7 +137,7 @@ local_host_uni (Text - Optional)
 
 created_at (Timestamp)
 
-7. TEKNİK ENTEGRASYONLAR
+6. TEKNİK ENTEGRASYONLAR
 
 Frontend (Next.js): PWA (Progressive Web App) özellikli, mobile-first responsive.
 
@@ -156,14 +145,12 @@ API (OpenRouter): Model bağımsız AI çağrıları.
 
 Backend (FastAPI): Python tabanlı asenkron logic, Supabase SDK entegrasyonu.
 
-Database (Supabase): PostgreSQL tabanlı, RLS (Row Level Security) ile kullanıcı bazlı veri güvenliği.
+Database (Neon): PostgreSQL tabanlı, RLS (Row Level Security) ile kullanıcı bazlı veri güvenliği.
 
-8. KABUL KRİTERLERİ (ACCEPTANCE CRITERIA)
+7. KABUL KRİTERLERİ (ACCEPTANCE CRITERIA)
 
 Kullanıcı mailine gelen 6 haneli OTP doğrulanmadan sisteme giremez.
 
 Chat kısmında 7 temel soru cevaplanmadan AI "Thinking Mode" tetiklenmez.
 
 Geçmiş geziler, kullanıcı profilinde seyahat detaylarına (ilişkisel tablolar üzerinden) erişecek şekilde listelenir.
-
-Discovery Feed'deki videolar ve kartlar mobil cihazlarda "swipe" edilebilir olmalıdır.
