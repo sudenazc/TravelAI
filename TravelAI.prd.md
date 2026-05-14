@@ -4,7 +4,7 @@ TravelAI - Ürün Gereksinim Dokümanı (PRD)
 
 Platform: Mobile-First Responsive Web Application
 
-Teknoloji Stack: Next.js, FastAPI, Postgresql, OpenRouter (LLM)
+Teknoloji Stack: Next.js, FastAPI, Supabase, OpenRouter (LLM)
 
 Hedef Kitle: Küresel Üniversite Öğrencileri
 
@@ -145,7 +145,7 @@ API (OpenRouter): Model bağımsız AI çağrıları.
 
 Backend (FastAPI): Python tabanlı asenkron logic, Supabase SDK entegrasyonu.
 
-Database (Neon): PostgreSQL tabanlı, RLS (Row Level Security) ile kullanıcı bazlı veri güvenliği.
+Database (Supabase): PostgreSQL tabanlı, RLS (Row Level Security) ile kullanıcı bazlı veri güvenliği.
 
 7. KABUL KRİTERLERİ (ACCEPTANCE CRITERIA)
 
