@@ -1,4 +1,11 @@
 import { env } from "./env";
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+  type TokenPair,
+} from "./auth";
 
 export class ApiError extends Error {
   constructor(
@@ -14,11 +21,32 @@ export class ApiError extends Error {
 type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   params?: Record<string, string | number | boolean | undefined>;
+  _isRetry?: boolean;
 };
+
+async function refreshAccessToken(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  try {
+    const url = new URL("/auth/refresh", env.apiBaseUrl);
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) return false;
+    const tokens = (await response.json()) as TokenPair;
+    setTokens(tokens);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function request<T>(
   path: string,
-  { body, params, ...init }: RequestOptions = {}
+  { body, params, _isRetry = false, ...init }: RequestOptions = {}
 ): Promise<T> {
   const url = new URL(path, env.apiBaseUrl);
 
@@ -28,15 +56,33 @@ async function request<T>(
     }
   }
 
+  const accessToken = getAccessToken();
+  const authHeader: Record<string, string> = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
+    : {};
+
   const response = await fetch(url.toString(), {
     ...init,
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...authHeader,
       ...init.headers,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  if (response.status === 401 && !_isRetry) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      return request<T>(path, { body, params, ...init, _isRetry: true });
+    }
+    clearTokens();
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+    throw new ApiError(401, "Session expired. Please sign in again.");
+  }
 
   if (!response.ok) {
     let data: unknown;

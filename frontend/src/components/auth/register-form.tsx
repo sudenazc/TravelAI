@@ -3,36 +3,47 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, Mail, Lock, Plane } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  User,
+  GraduationCap,
+  Plane,
+  CheckCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { http, ApiError } from "@/lib/http";
-import { useAuth } from "@/contexts/auth-context";
-import type { TokenPair } from "@/lib/auth";
 
-interface LoginPayload {
+interface SignupPayload {
   email: string;
   password: string;
+  full_name: string;
+  university_name: string;
 }
 
-export function LoginForm() {
+export function RegisterForm() {
   const router = useRouter();
-  const { login } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [universityName, setUniversityName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [fullNameError, setFullNameError] = useState("");
+  const [universityError, setUniversityError] = useState("");
 
   function validateEmail(value: string): boolean {
-    if (!value) {
-      setEmailError("Email is required.");
-      return false;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      setEmailError("Please enter a valid email address.");
+    if (!value) { setEmailError("Email is required."); return false; }
+    if (!/^[^\s@]+@[^\s@]+\.edu(\.[a-z]{2,})?$/i.test(value)) {
+      setEmailError("Only .edu or .edu.XX email addresses are accepted.");
       return false;
     }
     setEmailError("");
@@ -40,10 +51,7 @@ export function LoginForm() {
   }
 
   function validatePassword(value: string): boolean {
-    if (!value) {
-      setPasswordError("Password is required.");
-      return false;
-    }
+    if (!value) { setPasswordError("Password is required."); return false; }
     if (value.length < 6) {
       setPasswordError("Password must be at least 6 characters.");
       return false;
@@ -52,35 +60,84 @@ export function LoginForm() {
     return true;
   }
 
+  function validateFullName(value: string): boolean {
+    if (!value.trim()) { setFullNameError("Full name is required."); return false; }
+    setFullNameError("");
+    return true;
+  }
+
+  function validateUniversity(value: string): boolean {
+    if (!value.trim()) { setUniversityError("University name is required."); return false; }
+    setUniversityError("");
+    return true;
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const isEmailValid = validateEmail(email);
-    const isPasswordValid = validatePassword(password);
-    if (!isEmailValid || !isPasswordValid) return;
+    const valid =
+      validateEmail(email) &
+      validatePassword(password) &
+      validateFullName(fullName) &
+      validateUniversity(universityName);
+    if (!valid) return;
 
     setIsLoading(true);
     try {
-      const tokens = await http.post<TokenPair>("/auth/login", {
+      await http.post<{ message: string }>("/auth/signup", {
         email,
         password,
-      } satisfies LoginPayload);
-      login(tokens);
-      router.push("/");
+        full_name: fullName,
+        university_name: universityName,
+      } satisfies SignupPayload);
+      setIsSuccess(true);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setPasswordError("Incorrect email or password. Please try again.");
-      } else {
-        setPasswordError("Something went wrong. Please try again later.");
+      if (err instanceof ApiError) {
+        if (err.status === 400) {
+          setEmailError(err.message);
+        } else {
+          setEmailError("Something went wrong. Please try again later.");
+        }
       }
     } finally {
       setIsLoading(false);
     }
   }
 
+  if (isSuccess) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 py-12">
+        <div
+          className="pointer-events-none fixed inset-0 -z-10"
+          aria-hidden="true"
+          style={{ background: "var(--gradient-hero)" }}
+        />
+        <div className="w-full max-w-[440px]">
+          <div className="rounded-2xl border border-neutral-200 bg-white p-8 text-center" style={{ boxShadow: "var(--shadow-lg)" }}>
+            <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-green-100">
+              <CheckCircle className="size-7 text-green-600" />
+            </div>
+            <h2 className="font-display text-2xl font-bold text-neutral-900">Check your inbox</h2>
+            <p className="mt-2 text-sm text-neutral-500">
+              We sent a verification email to <strong className="text-neutral-700">{email}</strong>.
+              Click the link in the email to activate your account, then sign in.
+            </p>
+            <Button
+              variant="primary"
+              size="lg"
+              className="mt-6 w-full"
+              onClick={() => router.push("/login")}
+            >
+              Go to sign in
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 py-12">
-      {/* Background decoration */}
       <div
         className="pointer-events-none fixed inset-0 -z-10"
         aria-hidden="true"
@@ -105,10 +162,10 @@ export function LoginForm() {
 
           <div className="mt-2">
             <h1 className="font-display text-[28px] font-bold leading-tight text-neutral-900 lg:text-[32px]">
-              Welcome back
+              Create your account
             </h1>
             <p className="mt-1.5 text-sm text-neutral-500">
-              Sign in to continue planning your perfect trip
+              Student travel planning, powered by AI
             </p>
           </div>
         </div>
@@ -119,7 +176,36 @@ export function LoginForm() {
           style={{ boxShadow: "var(--shadow-lg)" }}
         >
           <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
-            {/* Email */}
+            <Input
+              type="text"
+              label="Full name"
+              placeholder="Ada Lovelace"
+              autoComplete="name"
+              value={fullName}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                if (fullNameError) validateFullName(e.target.value);
+              }}
+              state={fullNameError ? "error" : "default"}
+              hint={fullNameError || undefined}
+              leftIcon={<User className="size-4" />}
+            />
+
+            <Input
+              type="text"
+              label="University name"
+              placeholder="MIT"
+              autoComplete="organization"
+              value={universityName}
+              onChange={(e) => {
+                setUniversityName(e.target.value);
+                if (universityError) validateUniversity(e.target.value);
+              }}
+              state={universityError ? "error" : "default"}
+              hint={universityError || undefined}
+              leftIcon={<GraduationCap className="size-4" />}
+            />
+
             <Input
               type="email"
               label="University email address"
@@ -133,22 +219,20 @@ export function LoginForm() {
               state={emailError ? "error" : "default"}
               hint={emailError || "Must be a .edu email address"}
               leftIcon={<Mail className="size-4" />}
-              aria-describedby={emailError ? "email-error" : undefined}
             />
 
-            {/* Password */}
             <Input
               type={showPassword ? "text" : "password"}
               label="Password"
               placeholder="••••••••"
-              autoComplete="current-password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
                 if (passwordError) validatePassword(e.target.value);
               }}
               state={passwordError ? "error" : "default"}
-              hint={passwordError || undefined}
+              hint={passwordError || "At least 6 characters"}
               leftIcon={<Lock className="size-4" />}
               rightSlot={
                 <button
@@ -164,20 +248,8 @@ export function LoginForm() {
                   )}
                 </button>
               }
-              aria-describedby={passwordError ? "password-error" : undefined}
             />
 
-            {/* Forgot password */}
-            <div className="-mt-1 flex justify-end">
-              <Link
-                href="/forgot-password"
-                className="text-sm font-medium text-sky-600 transition-colors hover:text-sky-700 focus-visible:outline-2 focus-visible:outline-sky-500 focus-visible:outline-offset-1 rounded"
-              >
-                Forgot password?
-              </Link>
-            </div>
-
-            {/* Submit */}
             <Button
               type="submit"
               variant="primary"
@@ -185,54 +257,18 @@ export function LoginForm() {
               isLoading={isLoading}
               className="mt-1 w-full"
             >
-              {isLoading ? "Signing in…" : "Sign in"}
+              {isLoading ? "Creating account…" : "Create account"}
             </Button>
           </form>
-
-          {/* Divider */}
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-neutral-200" />
-            <span className="text-xs font-medium text-neutral-400">OR</span>
-            <div className="h-px flex-1 bg-neutral-200" />
-          </div>
-
-          {/* Social login placeholder */}
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            className="w-full gap-3"
-          >
-            <svg viewBox="0 0 24 24" className="size-4 shrink-0" aria-hidden="true">
-              <path
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                fill="#4285F4"
-              />
-              <path
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                fill="#34A853"
-              />
-              <path
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                fill="#EA4335"
-              />
-            </svg>
-            Continue with Google
-          </Button>
         </div>
 
-        {/* Sign up link */}
         <p className="mt-6 text-center text-sm text-neutral-500">
-          Don&apos;t have an account?{" "}
+          Already have an account?{" "}
           <Link
-            href="/register"
+            href="/login"
             className="font-semibold text-sky-600 transition-colors hover:text-sky-700 focus-visible:outline-2 focus-visible:outline-sky-500 focus-visible:outline-offset-1 rounded"
           >
-            Create one free
+            Sign in
           </Link>
         </p>
       </div>

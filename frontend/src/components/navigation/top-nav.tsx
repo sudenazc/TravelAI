@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plane } from "lucide-react";
-import { Button } from "@/components/ui";
+import { NavAuthSection } from "./nav-auth-section";
 
 const NAV_LINKS = [
   { label: "Planner", href: "/planner" },
@@ -49,11 +49,7 @@ export function TopNav({ activePath }: TopNavProps) {
 
         {/* Desktop CTA */}
         <div className="hidden lg:flex items-center gap-3">
-          <Link href="/login">
-            <Button variant="ghost" size="md">
-              Log in
-            </Button>
-          </Link>
+          <NavAuthSection />
         </div>
 
         {/* Mobile hamburger placeholder */}
