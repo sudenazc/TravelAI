@@ -1,15 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   MapPin,
   Calendar,
   DollarSign,
   ChevronRight,
+  Check,
   Plane,
   Sparkles,
   Map,
-  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TopNav } from "@/components/navigation";
@@ -192,12 +193,14 @@ const ACTIVITY_ICON: Record<ActivityType, string> = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function PlannerPage() {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [paramStep, setParamStep] = useState(0);
   const [collectedParams, setCollectedParams] = useState<Partial<GenerateTripParams>>({});
   const [trip, setTrip] = useState<TripResponse | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
   const [activeDay, setActiveDay] = useState(1);
   const [activeTab, setActiveTab] = useState<"chat" | "plan">("chat");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -219,6 +222,7 @@ export default function PlannerPage() {
       const result = await http.post<TripResponse>("/trips/generate", params);
       setIsTyping(false);
       setTrip(result);
+      setIsSaved(true);
       setActiveDay(1);
       addAiMessage(
         `Your itinerary is ready! 🎉 I've planned ${result.itinerary_data.duration_days} days in ${result.itinerary_data.destination} within your budget. Switch to the Plan tab to explore it.`
@@ -428,9 +432,26 @@ export default function PlannerPage() {
                       {trip.itinerary_data.destination}
                     </h1>
                   </div>
-                  <button className="flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:bg-sky-600 hover:shadow-brand active:scale-95">
-                    Save trip
-                    <ChevronRight className="size-4" />
+                  <button
+                    onClick={() => router.push("/my-trips")}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all duration-200 active:scale-95",
+                      isSaved
+                        ? "bg-emerald-500 hover:bg-emerald-600"
+                        : "bg-sky-500 hover:bg-sky-600 hover:shadow-brand"
+                    )}
+                  >
+                    {isSaved ? (
+                      <>
+                        <Check className="size-4" />
+                        Saved
+                      </>
+                    ) : (
+                      <>
+                        Save trip
+                        <ChevronRight className="size-4" />
+                      </>
+                    )}
                   </button>
                 </div>
 

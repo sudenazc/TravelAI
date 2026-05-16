@@ -3,20 +3,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Compass,
   CalendarDays,
-  Map,
-  MessageCircle,
+  Ticket,
+  Luggage,
   UserCircle,
+  Compass,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { label: "Discover", href: "/discover", Icon: Compass },
-  { label: "Planner", href: "/planner", Icon: CalendarDays },
-  { label: "Map", href: "/map", Icon: Map },
-  { label: "Chat", href: "/chat", Icon: MessageCircle },
-  { label: "Account", href: "/account", Icon: UserCircle },
+  { label: "Discover", href: "/", Icon: Compass, exact: true },
+  { label: "Planner", href: "/planner", Icon: CalendarDays, exact: false },
+  { label: "Tickets", href: "/tickets", Icon: Ticket, exact: false },
+  { label: "My Trips", href: "/my-trips", Icon: Luggage, exact: false },
+  { label: "Account", href: "/profile", Icon: UserCircle, exact: false },
 ] as const;
 
 export function BottomTabBar() {
@@ -25,8 +25,10 @@ export function BottomTabBar() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-neutral-100 bg-white pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
       <div className="flex h-16 items-center">
-        {TABS.map(({ label, href, Icon }) => {
-          const isActive = pathname === href || pathname.startsWith(href + "/");
+        {TABS.map(({ label, href, Icon, exact }) => {
+          const isActive = exact
+            ? pathname === href
+            : pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}

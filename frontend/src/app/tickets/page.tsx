@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Landmark,
   Users,
@@ -8,9 +8,16 @@ import {
   HandHeart,
   Ticket,
 } from "lucide-react";
-import { EventCard, type EventCategory } from "@/components/cards/event-card";
+import { EventCard } from "@/components/cards/event-card";
 import { WalletSection } from "@/components/tickets/wallet-section";
+import { BuyTicketModal } from "@/components/tickets/buy-ticket-modal";
+import { TopNav } from "@/components/navigation";
+import { BottomTabBar } from "@/components/navigation/bottom-tab-bar";
 import { cn } from "@/lib/utils";
+import { http, ApiError } from "@/lib/http";
+import { getAccessToken } from "@/lib/auth";
+import { env } from "@/lib/env";
+import type { EventCategory, EventResponse, OwnedTicketResponse } from "@/types/tickets";
 
 type CategoryTab = EventCategory | "all";
 
@@ -19,6 +26,8 @@ interface Tab {
   label: string;
   icon: React.ReactNode;
 }
+
+type ModalState = "confirm" | "loading" | "success";
 
 const TABS: Tab[] = [
   {
@@ -48,125 +57,96 @@ const TABS: Tab[] = [
   },
 ];
 
-const MOCK_EVENTS = [
-  {
-    id: "1",
-    title: "The Louvre — Skip-the-Line Guided Tour",
-    category: "museum" as EventCategory,
-    imageUrl: "https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=600&q=80",
-    date: "May 15, 2026",
-    time: "10:00 AM – 1:00 PM",
-    location: "Paris, France",
-    price: 49,
-    spotsLeft: 3,
-  },
-  {
-    id: "2",
-    title: "Tech Founders Mixer — Barcelona Summit",
-    category: "networking" as EventCategory,
-    imageUrl: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&q=80",
-    date: "May 20, 2026",
-    time: "6:00 PM – 10:00 PM",
-    location: "Barcelona, Spain",
-    price: 29,
-    spotsLeft: 18,
-  },
-  {
-    id: "3",
-    title: "Traditional Japanese Ceramics Workshop",
-    category: "workshop" as EventCategory,
-    imageUrl: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=600&q=80",
-    date: "May 22, 2026",
-    time: "2:00 PM – 5:00 PM",
-    location: "Kyoto, Japan",
-    price: 65,
-    spotsLeft: 8,
-  },
-  {
-    id: "4",
-    title: "Sunset Walk & Stories with a Local Guide",
-    category: "local" as EventCategory,
-    imageUrl: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&q=80",
-    date: "May 18, 2026",
-    time: "5:30 PM – 8:00 PM",
-    location: "Lisbon, Portugal",
-    price: 22,
-    spotsLeft: 6,
-  },
-  {
-    id: "5",
-    title: "Rijksmuseum — Dutch Masters Private Evening",
-    category: "museum" as EventCategory,
-    imageUrl: "https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=600&q=80",
-    date: "May 25, 2026",
-    time: "7:00 PM – 9:30 PM",
-    location: "Amsterdam, Netherlands",
-    price: 75,
-    spotsLeft: 12,
-  },
-  {
-    id: "6",
-    title: "Sustainable Travel Networking Brunch",
-    category: "networking" as EventCategory,
-    imageUrl: "https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=600&q=80",
-    date: "May 28, 2026",
-    time: "11:00 AM – 2:00 PM",
-    location: "Copenhagen, Denmark",
-    price: 35,
-    spotsLeft: 22,
-  },
-  {
-    id: "7",
-    title: "Neapolitan Pizza-Making Masterclass",
-    category: "workshop" as EventCategory,
-    imageUrl: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=80",
-    date: "Jun 1, 2026",
-    time: "12:00 PM – 3:30 PM",
-    location: "Naples, Italy",
-    price: 55,
-    spotsLeft: 10,
-  },
-  {
-    id: "8",
-    title: "Hidden Istanbul: Bazaars & Tea with Locals",
-    category: "local" as EventCategory,
-    imageUrl: "https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=600&q=80",
-    date: "Jun 5, 2026",
-    time: "9:00 AM – 1:00 PM",
-    location: "Istanbul, Turkey",
-    price: 30,
-    spotsLeft: 5,
-  },
-];
-
-const MOCK_WALLET_TICKETS = [
-  {
-    id: "t1",
-    eventTitle: "Colosseum — Early Access VIP Tour",
-    date: "May 10, 2026",
-    location: "Rome, Italy",
-    status: "upcoming" as const,
-  },
-  {
-    id: "t2",
-    eventTitle: "Street Art Workshop — Shoreditch",
-    date: "Apr 28, 2026",
-    location: "London, UK",
-    status: "used" as const,
-  },
-];
-
 export default function TicketMarketPage() {
   const [activeTab, setActiveTab] = useState<CategoryTab>("all");
+  const [events, setEvents] = useState<EventResponse[]>([]);
+  const [ownedTickets, setOwnedTickets] = useState<OwnedTicketResponse[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [walletLoading, setWalletLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
+  const [selectedEvent, setSelectedEvent] = useState<EventResponse | null>(null);
+  const [modalState, setModalState] = useState<ModalState>("confirm");
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+
+  const fetchEvents = useCallback(() => {
+    setEventsLoading(true);
+    setEventsError(null);
+    const params =
+      activeTab !== "all" ? { category: activeTab } : undefined;
+    http
+      .get<EventResponse[]>("/tickets/events", { params })
+      .then(setEvents)
+      .catch((err: Error) => setEventsError(err.message))
+      .finally(() => setEventsLoading(false));
+  }, [activeTab]);
+
+  const fetchOwnedTickets = useCallback(async () => {
+    setWalletLoading(true);
+    try {
+      const token = getAccessToken();
+      if (!token) return;
+      const res = await fetch(`${env.apiBaseUrl}/tickets`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      if (!res.ok) return;
+      const data: OwnedTicketResponse[] = await res.json();
+      setOwnedTickets(data);
+    } catch {
+      // Silently ignore — wallet is non-critical
+    } finally {
+      setWalletLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
+
+  useEffect(() => {
+    fetchOwnedTickets();
+  }, [fetchOwnedTickets]);
+
+  const handleBuy = (eventId: string) => {
+    const event = events.find((e) => e.id === eventId) ?? null;
+    setSelectedEvent(event);
+    setModalState("confirm");
+    setPurchaseError(null);
+  };
+
+  const handleConfirmPurchase = async () => {
+    if (!selectedEvent) return;
+    setModalState("loading");
+    setPurchaseError(null);
+    try {
+      await http.post("/tickets/purchase", { event_id: selectedEvent.id });
+      setModalState("success");
+      fetchOwnedTickets();
+      fetchEvents();
+    } catch (err) {
+      const msg =
+        err instanceof ApiError ? err.message : "Purchase failed. Try again.";
+      setPurchaseError(msg);
+      setModalState("confirm");
+    }
+  };
+
+  const handleCloseModal = () => {
+    setSelectedEvent(null);
+    setPurchaseError(null);
+  };
 
   const filteredEvents =
-    activeTab === "all"
-      ? MOCK_EVENTS
-      : MOCK_EVENTS.filter((e) => e.category === activeTab);
+    activeTab === "all" ? events : events.filter((e) => e.category === activeTab);
 
   return (
-    <main className="min-h-screen bg-neutral-50">
-      <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-10">
+    <div className="min-h-screen bg-neutral-50">
+      <TopNav />
+
+      <main className="mx-auto max-w-[1440px] px-4 py-8 pb-24 sm:px-6 lg:px-10 lg:pb-8">
 
         {/* Page header */}
         <header className="mb-8">
@@ -207,16 +187,33 @@ export default function TicketMarketPage() {
           ))}
         </nav>
 
+        {/* Purchase error */}
+        {purchaseError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {purchaseError}
+          </div>
+        )}
+
         {/* Event cards grid */}
-        {filteredEvents.length > 0 ? (
+        {eventsLoading ? (
+          <EventGridSkeleton />
+        ) : eventsError ? (
+          <EventsError message={eventsError} onRetry={fetchEvents} />
+        ) : filteredEvents.length > 0 ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4 mb-10">
             {filteredEvents.map((event) => (
               <EventCard
                 key={event.id}
-                {...event}
-                onBuy={(id) => {
-                  console.log("Buy ticket for event:", id);
-                }}
+                id={event.id}
+                title={event.title}
+                category={event.category}
+                imageUrl={event.image_url}
+                date={event.date}
+                time={event.time}
+                location={event.location}
+                price={event.price_usd}
+                spotsLeft={event.spots_left ?? undefined}
+                onBuy={handleBuy}
               />
             ))}
           </div>
@@ -238,9 +235,63 @@ export default function TicketMarketPage() {
         <WalletSection
           balance={240}
           currency="USD"
-          tickets={MOCK_WALLET_TICKETS}
+          tickets={
+            walletLoading
+              ? []
+              : ownedTickets.map((t) => ({
+                  id: t.id,
+                  eventTitle: t.event_title,
+                  date: t.date,
+                  location: t.location,
+                  status: t.status,
+                }))
+          }
+          isLoading={walletLoading}
         />
-      </div>
-    </main>
+      </main>
+
+      {/* Buy ticket modal */}
+      <BuyTicketModal
+        event={selectedEvent}
+        state={modalState}
+        onConfirm={handleConfirmPurchase}
+        onClose={handleCloseModal}
+      />
+
+      <BottomTabBar />
+    </div>
+  );
+}
+
+function EventGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4 mb-10">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-72 rounded-xl border border-neutral-100 bg-white animate-pulse"
+        />
+      ))}
+    </div>
+  );
+}
+
+function EventsError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-red-100 bg-red-50 py-16 text-center mb-10">
+      <p className="text-sm font-medium text-red-600">{message}</p>
+      <button
+        onClick={onRetry}
+        className="rounded-md bg-sky-500 px-5 h-9 text-sm font-semibold text-white hover:bg-sky-600 transition-colors"
+      >
+        Retry
+      </button>
+    </div>
   );
 }

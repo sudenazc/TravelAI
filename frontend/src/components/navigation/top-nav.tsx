@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Plane } from "lucide-react";
 import { NavAuthSection } from "./nav-auth-section";
 
@@ -8,11 +11,9 @@ const NAV_LINKS = [
   { label: "My Trips", href: "/my-trips" },
 ] as const;
 
-interface TopNavProps {
-  activePath?: string;
-}
+export function TopNav() {
+  const pathname = usePathname();
 
-export function TopNav({ activePath }: TopNavProps) {
   return (
     <header className="sticky top-0 z-50 h-14 lg:h-[72px] w-full border-b border-neutral-100 bg-white/90 shadow-xs backdrop-blur">
       <div className="mx-auto flex h-full max-w-[1440px] items-center justify-between px-4 lg:px-10">
@@ -30,7 +31,7 @@ export function TopNav({ activePath }: TopNavProps) {
         {/* Desktop nav */}
         <nav className="hidden lg:flex items-center gap-7">
           {NAV_LINKS.map(({ label, href }) => {
-            const isActive = activePath === href;
+            const isActive = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link
                 key={href}

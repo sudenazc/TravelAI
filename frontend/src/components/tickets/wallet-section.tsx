@@ -16,6 +16,7 @@ interface WalletSectionProps {
   balance: number;
   currency?: string;
   tickets?: OwnedTicket[];
+  isLoading?: boolean;
   className?: string;
 }
 
@@ -38,6 +39,7 @@ export function WalletSection({
   balance,
   currency = "USD",
   tickets = [],
+  isLoading = false,
   className,
 }: WalletSectionProps) {
   const formattedBalance = new Intl.NumberFormat("en-US", {
@@ -82,7 +84,13 @@ export function WalletSection({
         </button>
       </div>
 
-      {tickets.length === 0 ? (
+      {isLoading ? (
+        <div className="flex flex-col gap-2 p-4">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="h-16 rounded-lg bg-neutral-100 animate-pulse" />
+          ))}
+        </div>
+      ) : tickets.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-neutral-100">
             <QrCode className="size-7 text-neutral-400" strokeWidth={1.5} />

@@ -7,17 +7,13 @@ from schemas.user import UserProfile, UserResponse, UserUpdate
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-async def _fetch_profile(user_id: str) -> UserProfile:
+async def _fetch_profile(user_id: str) -> UserProfile | None:
     client = await get_anon_client()
-    result = (
-        await client.table("profiles").select("*").eq("id", user_id).single().execute()
-    )
-    if not result.data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User profile not found.",
-        )
-    return UserProfile(**result.data)
+    result = await client.table("profiles").select("*").eq("id", user_id).execute()
+    rows = result.data or []
+    if not rows:
+        return None
+    return UserProfile(**rows[0])
 
 
 @router.get(
@@ -28,11 +24,28 @@ async def _fetch_profile(user_id: str) -> UserProfile:
 async def get_me(current_user: dict = Depends(get_current_user)) -> UserResponse:
     """
     Return the authenticated user's profile from the `profiles` table.
+    Auto-creates the profile row if it does not exist yet (first login before
+    any trip or ticket has been created).
 
     Requires a valid `Bearer` token in the `Authorization` header.
     """
     user_id: str = current_user["sub"]
     profile = await _fetch_profile(user_id)
+
+    if profile is None:
+        db = await get_admin_client()
+        await db.table("profiles").upsert(
+            {"id": user_id, "edu_email": current_user["email"]},
+            on_conflict="id",
+        ).execute()
+        profile = await _fetch_profile(user_id)
+
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found.",
+        )
+
     return UserResponse(data=profile)
 
 
