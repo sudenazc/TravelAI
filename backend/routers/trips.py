@@ -17,7 +17,62 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/trips", tags=["Trips"])
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-LLM_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+
+# Tried in order; next is used on 429, 404, or truncated/invalid JSON.
+# Verified against openrouter.ai/models as of 2026-05.
+# Excludes thinking/reasoning models that wrap JSON in prose.
+FREE_MODELS = [
+    "deepseek/deepseek-v4-flash:free",        # 1M ctx, very capable, great JSON
+    "nvidia/nemotron-3-super-120b-a12b:free", # 1M ctx, 120B model
+    "qwen/qwen3-coder:free",                  # 1M ctx, strong structured output
+    "meta-llama/llama-3.3-70b-instruct:free", # 131K ctx, reliable
+    "nvidia/nemotron-3-nano-30b-a3b:free",    # 256K ctx
+    "qwen/qwen-2.5-7b-instruct:free",         # 131K ctx, best-in-class JSON
+    "nvidia/nemotron-nano-9b-v2:free",        # 128K ctx
+    "meta-llama/llama-3.2-3b-instruct:free",  # smallest fallback
+]
+
+def _extract_json_object(text: str) -> str:
+    """
+    Pull the first complete top-level JSON object out of `text`.
+    Handles models that prepend reasoning prose or append trailing text.
+    """
+    # Strip markdown fences first
+    if "```" in text:
+        lines = text.splitlines()
+        text = "\n".join(l for l in lines if not l.startswith("```")).strip()
+
+    start = text.find("{")
+    if start == -1:
+        return text  # No JSON found — let caller raise the parse error
+
+    # Walk backward from the end to find the matching closing brace
+    depth = 0
+    in_string = False
+    escape_next = False
+    end = start
+    for i, ch in enumerate(text[start:], start=start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+
+    return text[start : end + 1]
+
 
 SYSTEM_PROMPT = """\
 You are a budget-conscious student travel planner. Return ONLY valid JSON — no markdown, no code fences, no extra text.
@@ -73,63 +128,61 @@ def _build_user_prompt(req: GenerateTripRequest) -> str:
 
 async def _call_openrouter(req: GenerateTripRequest) -> ItineraryData:
     settings = get_settings()
-    payload = {
-        "model": LLM_MODEL,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": _build_user_prompt(req)},
-        ],
-        "temperature": 0.7,
-        "max_tokens": 4096,
-    }
     headers = {
         "Authorization": f"Bearer {settings.openrouter_api_key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://travelai.app",
         "X-Title": "TravelAI",
     }
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": _build_user_prompt(req)},
+    ]
 
+    last_error: str = "All models failed."
     async with httpx.AsyncClient(timeout=90.0) as client:
-        response = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
+        for model in FREE_MODELS:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 8192,
+                "response_format": {"type": "json_object"},
+            }
+            response = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
 
-    if response.status_code != 200:
-        logger.error("OpenRouter error %s: %s", response.status_code, response.text)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="AI service returned an error. Please try again.",
-        )
+            if response.status_code in (429, 404):
+                logger.warning("Model %s unavailable (%s), trying next.", model, response.status_code)
+                last_error = f"{model} returned {response.status_code}."
+                continue
 
-    data = response.json()
-    message = data["choices"][0]["message"]
-    # Some reasoning models return content=null and text in the reasoning field
-    raw_content: str | None = message.get("content") or message.get("reasoning")
+            if response.status_code != 200:
+                logger.error("OpenRouter error %s (%s): %s", response.status_code, model, response.text)
+                last_error = f"Model {model} returned {response.status_code}."
+                continue
 
-    if not raw_content:
-        logger.error("OpenRouter returned empty content. Full response: %s", data)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="AI service returned an empty response. Please try again.",
-        )
+            data = response.json()
+            message = data["choices"][0]["message"]
+            raw_content: str | None = message.get("content") or message.get("reasoning")
 
-    raw_content = raw_content.strip()
+            if not raw_content or len(raw_content.strip()) < 50:
+                logger.error("Model %s returned empty/truncated content: %s", model, data)
+                last_error = f"Model {model} returned empty or truncated content."
+                continue
 
-    # Strip markdown fences if the model wraps output despite instructions
-    if raw_content.startswith("```"):
-        lines = raw_content.splitlines()
-        raw_content = "\n".join(
-            line for line in lines if not line.startswith("```")
-        ).strip()
+            raw_content = _extract_json_object(raw_content.strip())
 
-    try:
-        itinerary = ItineraryData.model_validate_json(raw_content)
-    except Exception as exc:
-        logger.error("Failed to parse LLM response: %s\nRaw: %s", exc, raw_content)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="AI returned an unexpected response format. Please try again.",
-        ) from exc
+            try:
+                return ItineraryData.model_validate_json(raw_content)
+            except Exception as exc:
+                logger.error("Failed to parse response from %s: %s\nRaw: %s", model, exc, raw_content)
+                last_error = f"Model {model} returned invalid JSON."
+                continue
 
-    return itinerary
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"AI service unavailable: {last_error} Please try again in a moment.",
+    )
 
 
 @router.post("/generate", response_model=TripResponse, status_code=status.HTTP_201_CREATED)
@@ -141,6 +194,14 @@ async def generate_trip(
     itinerary = await _call_openrouter(req)
 
     db = await get_admin_client()
+
+    # Ensure a profile row exists — signup doesn't create it automatically.
+    # upsert is idempotent so repeated calls are safe.
+    await db.table("profiles").upsert(
+        {"id": current_user["sub"], "edu_email": current_user["email"]},
+        on_conflict="id",
+    ).execute()
+
     row = {
         "user_id": current_user["sub"],
         "origin": req.origin,
