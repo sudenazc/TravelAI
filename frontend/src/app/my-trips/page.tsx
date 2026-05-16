@@ -1,24 +1,37 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Plus, Plane } from "lucide-react";
 import { TopNav } from "@/components/navigation";
 import { MyTripCard } from "@/components/cards";
+import { http } from "@/lib/http";
 
-const MY_TRIPS = [
-  {
-    id: "vienna-2026",
-    title: "Vienna Getaway",
-    destination: "Vienna, Austria",
-    accommodation: "Vienna Hostel",
-    durationDays: 3,
-    budget: 130,
-    currency: "TL",
-    status: "upcoming" as const,
-  },
-];
+interface TripSummary {
+  id: string;
+  destination: string;
+  origin: string;
+  duration_days: number | null;
+  total_budget_est: number | null;
+  itinerary_data: {
+    accommodation_summary?: string;
+  };
+  created_at: string;
+}
 
 export default function MyTripsPage() {
+  const [trips, setTrips] = useState<TripSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    http
+      .get<TripSummary[]>("/trips")
+      .then(setTrips)
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div className="min-h-screen bg-neutral-50">
       <TopNav />
@@ -44,19 +57,59 @@ export default function MyTripsPage() {
           </Link>
         </div>
 
-        {MY_TRIPS.length === 0 ? (
+        {loading ? (
+          <LoadingSkeleton />
+        ) : error ? (
+          <ErrorState message={error} />
+        ) : trips.length === 0 ? (
           <EmptyState />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {MY_TRIPS.map((trip) => (
-              <MyTripCard key={trip.id} {...trip} />
+            {trips.map((trip) => (
+              <MyTripCard
+                key={trip.id}
+                id={trip.id}
+                title={trip.destination}
+                destination={`${trip.origin} → ${trip.destination}`}
+                accommodation={trip.itinerary_data?.accommodation_summary?.slice(0, 60)}
+                durationDays={trip.duration_days ?? undefined}
+                budget={trip.total_budget_est ?? undefined}
+                currency="USD"
+                status="completed"
+              />
             ))}
 
-            {/* add-new placeholder card */}
             <AddTripCard />
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-44 rounded-xl border border-neutral-100 bg-white animate-pulse"
+        />
+      ))}
+    </div>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-red-100 bg-red-50 py-16 text-center">
+      <p className="text-sm font-medium text-red-600">{message}</p>
+      <Link
+        href="/planner"
+        className="inline-flex items-center justify-center rounded-md bg-sky-500 px-5 h-10 text-sm font-semibold text-white transition-all duration-200 hover:bg-sky-600"
+      >
+        Plan a new trip
+      </Link>
     </div>
   );
 }

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     supabase_anon_key: str
     supabase_service_role_key: str
     supabase_jwt_aud: str = "authenticated"
+    openrouter_api_key: str
 
     @property
     def supabase_jwks_url(self) -> str:
