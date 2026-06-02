@@ -1,13 +1,15 @@
-# ✈️ Travel AI — Design System & UI/UX Kılavuzu
+# Travel AI — Design System & UI/UX Kılavuzu
 
 > **Versiyon:** 1.0  
 > **Tarih:** Nisan 2026  
 > **Yaklaşım:** Mobile-First, Responsive Web  
 > **Referans Renk:** `#bfdbfe`
 
+Bu dosya Travel AI uygulamasının **tek gerçek kaynak (single source of truth)** tasarım sistemidir. Yeni ekran, bileşen, tema/token veya stil değişikliği yapmadan önce bu dokümanla hizalama yapılmalıdır. Güncelleme gerektiğinde versiyon numarası artırılmalı ve değişiklik logu tutulmalıdır.
+
 ---
 
-## 📋 İçindekiler
+## İçindekiler
 
 1. [Renk Paleti](#renk-paleti)
 2. [Tipografi](#tipografi)
@@ -22,7 +24,7 @@
 
 ---
 
-## 🎨 Renk Paleti
+## Renk Paleti
 
 ### Ana Renk — Sky Blue (`#bfdbfe` temelli)
 
@@ -110,7 +112,7 @@ Border:
 
 ---
 
-## 🔤 Tipografi
+## Tipografi
 
 ### Font Ailesi
 
@@ -155,7 +157,7 @@ Border:
 
 ---
 
-## 📐 Boşluk & Grid Sistemi
+## Boşluk & Grid Sistemi
 
 ### Boşluk Skalası (4px tabanlı)
 
@@ -212,7 +214,7 @@ Desktop (≥ 1024px):
 
 ---
 
-## 🔲 Köşe Yarıçapları & Gölgeler
+## Köşe Yarıçapları & Gölgeler
 
 ### Border Radius
 
@@ -255,7 +257,7 @@ Desktop (≥ 1024px):
 
 ---
 
-## 🧩 Komponent Kütüphanesi
+## Komponent Kütüphanesi
 
 ### 1. Butonlar
 
@@ -567,7 +569,7 @@ Yorum sayısı : neutral-400, parantez içinde
 
 ---
 
-## 📄 Sayfa Şablonları
+## Sayfa Şablonları
 
 ### Landing Page Yapısı
 
@@ -636,7 +638,7 @@ Mobile (tek sütun, tab geçişi):
 
 ---
 
-## 🖼️ İkonografi & Görsel Dil
+## İkonografi & Görsel Dil
 
 ### İkon Seti
 
@@ -648,10 +650,10 @@ Mobile (tek sütun, tab geçişi):
 
 ```
 ✈ uçak          → uçuş kartları, başlık
-🏨 otel          → konaklama bölümü  
+🏨 otel          → konaklama bölümü
 🗺️ harita        → harita butonu, navigasyon
 📅 takvim        → tarih seçici
-🕐 saat          → süre, zaman  
+🕐 saat          → süre, zaman
 👥 kişi          → yolcu sayısı
 💰 para          → fiyat, bütçe
 ⭐ yıldız        → değerlendirme
@@ -667,7 +669,7 @@ Destinasyon görselleri:
   - En boy oranı: 4:3 (kart) / 16:9 (hero)
   - Overlay: gradient-card-overlay (alt metin okunabilirliği)
   - Yükleme: blur-up (düşük kalite → yüksek kalite geçiş)
-  
+
 Avatar / profil:
   - radius-full, border: 2px white
   - Fallback: baş harfler, sky-400 arkaplan
@@ -675,7 +677,7 @@ Avatar / profil:
 
 ---
 
-## ✨ Animasyon & Etkileşim
+## Animasyon & Etkileşim
 
 ### Geçiş Süreleri
 
@@ -709,18 +711,18 @@ Sayfa geçişi  → slideInRight, 300ms ease-in-out
 
 ---
 
-## ♿ Erişilebilirlik
+## Erişilebilirlik
 
 ### Renk Kontrastı (WCAG 2.1 AA)
 
 | Kombinasyon | Oran | Durum |
 |---|---|---|
-| neutral-900 / neutral-0 | 16.7:1 | ✅ AAA |
-| neutral-600 / neutral-0 | 5.9:1 | ✅ AA |
-| sky-600 / neutral-0 | 4.7:1 | ✅ AA |
-| sky-500 / neutral-0 | 3.2:1 | ⚠️ Yalnızca büyük metin |
-| white / sky-500 | 3.2:1 | ⚠️ Buton: büyük+bold OK |
-| white / sky-600 | 4.7:1 | ✅ AA |
+| neutral-900 / neutral-0 | 16.7:1 | AAA |
+| neutral-600 / neutral-0 | 5.9:1 | AA |
+| sky-600 / neutral-0 | 4.7:1 | AA |
+| sky-500 / neutral-0 | 3.2:1 | Yalnızca büyük metin |
+| white / sky-500 | 3.2:1 | Buton: büyük+bold OK |
+| white / sky-600 | 4.7:1 | AA |
 
 ### Dokunma Hedefleri
 
@@ -742,7 +744,7 @@ Boşluk gap    : minimum 8px aralarında
 
 ---
 
-## 📱 Mobile-First Breakpoint'ler
+## Mobile-First Breakpoint'ler
 
 ### CSS Değişkenleri
 
@@ -756,7 +758,7 @@ Boşluk gap    : minimum 8px aralarında
 --bp-3xl: 1440px;  /* Geniş ekran */
 ```
 
-### Tailwind Config (tailwind.config.js)
+### Tailwind Config
 
 ```js
 module.exports = {
@@ -832,7 +834,7 @@ Harita:
 
 ---
 
-## 🗂️ Dosya & Klasör Yapısı (Öneri)
+## Dosya & Klasör Yapısı
 
 ```
 src/
@@ -856,7 +858,3 @@ src/
     ├── globals.css
     └── tokens.css
 ```
-
----
-
-*Bu doküman Travel AI uygulamasının tek gerçek kaynak (single source of truth) tasarım sistemi olarak kullanılmalıdır. Güncelleme gerektiğinde versiyon numarası artırılmalı ve değişiklik logu tutulmalıdır.*

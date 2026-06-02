@@ -1,0 +1,198 @@
+# TravelAI — Progress
+
+> Her işlemin, alınan kararların ve hataların kaydı. Git geçmişine göre oluşturulmuştur.  
+> Yeni bir şey tamamlandığında bu dosyayı güncelle.
+
+**Durum:** `[x]` tamamlandı · `[~]` devam ediyor · `[ ]` bekliyor
+
+---
+
+## Tamamlanan İşler (Git Geçmişi)
+
+### `31fc9e5` — Initial commit
+- **Tarih:** Projenin başlangıcı
+- **İçerik:** Repo oluşturuldu
+
+---
+
+### `b200e24` — Add PRD docs and ignore macOS artifacts
+- **İçerik:** `TravelAI.prd.md` ve `Projectoverview_prd.md` eklendi; `.gitignore` macOS artifact'ları içerecek şekilde güncellendi
+- **Karar:** Projenin iki ayrı PRD versiyonu (v1 web + v2 iOS) ile başlamasına karar verildi
+
+---
+
+### `6d3f7b8` — Add backend uv setup and Supabase schema/RLS
+- **İçerik:**
+  - FastAPI backend iskeleti kuruldu (`main.py`, `app.py`, `core/`, `db/`, `routers/`, `schemas/`)
+  - `pyproject.toml` + `uv.lock` ile bağımlılık yönetimi
+  - Supabase migration `0001_profiles_trips_rls.sql`: `profiles` + `trips` tabloları + RLS
+  - Supabase migration `0002_events_tickets.sql`: `tickets` tablosu
+- **Karar:** Paket yönetimi olarak `uv` seçildi (pip'e göre daha hızlı, lock-file tabanlı)
+- **Karar:** Veri modeli olarak `trips.itinerary_data JSONB` (MVP için hızlı) tercih edildi
+
+---
+
+### `b03f8d0` — Initialize frontend
+- **İçerik:**
+  - Next.js 14 (App Router) projesi kuruldu
+  - Tailwind CSS + PostCSS yapılandırması
+  - `tailwind.config.ts` — sky palette + custom tokens
+  - `styles/tokens.css` + `styles/globals.css`
+  - `.env.example` oluşturuldu
+- **Karar:** Framework olarak Next.js App Router seçildi (RSC + nested layouts)
+
+---
+
+### `df6a928` — Introduce planner page
+- **İçerik:**
+  - `/planner` route oluşturuldu
+  - Temel planner sayfa yapısı
+
+---
+
+### `16af3c4` — Introduce ticket page
+- **İçerik:**
+  - `/tickets` route oluşturuldu
+  - Temel ticket sayfası
+
+---
+
+### `66506ad` — Introduce my tickets page
+- **İçerik:**
+  - My Tickets sayfası eklendi
+  - Wallet section bileşeni
+
+---
+
+### `b996ffe` + `2f207fb` — Update TravelAI.prd.md (x2)
+- **İçerik:** PRD dokümanı iki kez revize edildi
+- **Karar:** Özellik kapsamı ve kabul kriterleri netleştirildi
+
+---
+
+### `1680921` — Implement auth
+- **İçerik:**
+  - `backend/routers/auth.py` — `POST /auth/verify-edu`
+  - `backend/core/security.py` — Supabase JWT + JWKS doğrulaması
+  - `backend/dependencies.py` — `get_current_user` FastAPI dependency
+  - `frontend/src/app/(auth)/login/page.tsx`
+  - `frontend/src/app/(auth)/register/page.tsx`
+  - `frontend/src/contexts/auth-context.tsx`
+  - `frontend/src/app/middleware.ts` — korumalı route redirect
+  - `frontend/src/lib/auth.ts`
+  - `components/auth/login-form`, `register-form`
+- **Karar:** Supabase Auth email OTP kullanıldı; backend yalnızca token doğrular, login yapmaz
+
+---
+
+### `1cffbd3` — Introduce planner (chat flow)
+- **İçerik:**
+  - AI chat arayüzü — mesaj balonları, suggestion chips
+  - `components/chat/bubble.tsx`, `chat/input.tsx`, `chat/chips.tsx`, `chat/typing-indicator.tsx`
+  - Chat-first parametre toplama akışı
+
+---
+
+### `27a54fb` — Implement trip planner logic
+- **İçerik:**
+  - `backend/routers/trips.py` — `/trips` CRUD endpoint'leri
+  - `backend/schemas/trips.py` — Pydantic modelleri
+  - OpenRouter LLM entegrasyonu (`/itinerary/generate`)
+  - Itinerary JSON render (günlük kartlar, bütçe özeti)
+  - `frontend/src/app/planner/[id]/page.tsx`
+- **Karar:** OpenRouter tercih edildi (model-agnostic, maliyet esnekliği)
+
+---
+
+### `31d269b` — Introduce tickets and profile page
+- **İçerik:**
+  - `backend/routers/tickets.py` — ticket CRUD + claim
+  - `backend/schemas/tickets.py`
+  - `frontend/src/app/profile/page.tsx`
+  - `frontend/src/app/my-trips/page.tsx`
+  - `components/tickets/buy-ticket-modal.tsx`
+  - `components/tickets/wallet-section.tsx`
+  - Navigation bileşenleri: `bottom-tab-bar`, `top-nav`, `nav-auth-section`
+  - UI atom bileşenler: `badge`, `button`, `input`, `search-input`
+  - Destination + Event + Trip kart bileşenleri
+
+---
+
+### Dokümantasyon Konsolidasyonu
+- **İçerik:**
+  - Tüm dokümantasyon `docs/` altında 5 zorunlu dosyada birleştirildi:
+    - `docs/PRD.md` — v3.0 (6 EPIC, yeni özellikler dahil)
+    - `docs/tech-stack.md`
+    - `docs/Plan.md`
+    - `docs/DesignSystem.md`
+    - `docs/Progress.md`
+  - Eski kaynak dosyalar silindi: `TravelAI.prd.md`, `Projectoverview_prd.md`, `docs/auth_and_jwt.md`, `frontend/travel-ai-design-system.md`
+  - `.cursor/rules/TravelAI-design-system.mdc` → `docs/DesignSystem.md` path'ine güncellendi
+- **Karar:** Tek kaynak (single source of truth) prensibine geçildi; çift dosya kaldırıldı
+
+---
+
+## Devam Eden İşler
+
+### `[~]` EPIC 2 — Cost Optimized Trip Enrichment
+- Temel AI planner çalışıyor; Company Opportunities + Local Help entegrasyonu bekliyor
+- Yapılacak:
+  - [ ] Opportunities sorgusunu itinerary generate'e entegre et
+  - [ ] Local Helper sorgusunu prompt context'e ekle
+  - [ ] Enriched LLM prompt testi
+
+---
+
+## Bekleyen İşler
+
+### `[ ]` DB Migration 0003 — Yeni Tablolar
+- `opportunities` tablosu + RLS
+- `experiences` + `experience_likes` tabloları
+- `profiles` tablosuna: `is_local_helper`, `helper_region`, `helper_bio`, `helper_availability`
+- `trips` tablosuna: `is_cloned`, `cloned_from`
+
+---
+
+### `[ ]` EPIC 4 — Company Opportunities Genişletmesi
+- [ ] `opportunities` tablosu seed data ile doldur
+- [ ] `GET /opportunities?city=&category=` endpoint'i
+- [ ] `POST /opportunities/claim/:id` — concurrency lock
+- [ ] `GET /opportunities/wallet` — QR kodlu claim listesi
+- [ ] Frontend: Opportunities tab UI, kategori filtresi, claim modal, QR gösterimi
+- [ ] Frontend: Profile Wallet'ta claimed fırsatlar
+- [ ] Last-minute badge + countdown timer bileşeni
+
+---
+
+### `[ ]` EPIC 5 — Share Experience & Learn From Others
+- [ ] `POST /experiences` — blog yayımla
+- [ ] `GET /experiences?city=&tags=` — feed
+- [ ] `POST /experiences/:id/like` — beğen (idempotent)
+- [ ] `POST /experiences/:id/save` — itinerary klon
+- [ ] Frontend: Share Experience tab, feed listesi, şehir/ilgi filtresi
+- [ ] Frontend: Blog yazısı okuma ekranı (like + save CTA)
+- [ ] Frontend: Blog yazma formu (profile/my-trips'ten tetiklenir)
+- [ ] Frontend: Profile'da "Saved Trips" bölümü
+
+---
+
+### `[ ]` EPIC 6 — Local Help
+- [ ] `PUT /profile/local-helper` — toggle + bölge/bio/availability
+- [ ] `GET /locals?region=` — aktif helper'lar
+- [ ] `POST /locals/book/:helper_id` — booking
+- [ ] `GET /locals/bookings` — booking geçmişi
+- [ ] Frontend: Profile'da "Be a Local Helper" toggle
+- [ ] Frontend: Helper detay formu (bölge, bio, availability picker)
+- [ ] Frontend: Itinerary'de Local Helper slot kartı + "Connect" CTA
+- [ ] Frontend: Helper profil modal + booking onay ekranı
+- [ ] Frontend: Profile'da "My Bookings" bölümü
+
+---
+
+## Hatalar & Notlar
+
+> Bu bölüme geliştirme sırasında karşılaşılan hatalar, alınan kararlar ve önemli notlar eklenecek.
+
+| Tarih | Bileşen | Açıklama | Çözüm |
+|---|---|---|---|
+| — | — | — | — |
