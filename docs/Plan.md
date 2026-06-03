@@ -53,8 +53,8 @@
 - [x] OpenRouter entegrasyonu (model-agnostic)
 - [x] `schemas/itinerary.py` — request/response Pydantic modelleri
 - [ ] `GET opportunities?city=&dates=` sorgusunu itinerary generate içine entegre et
-- [ ] `GET profiles?is_local_helper=true&region=` sorgusunu prompt context'e ekle
-- [ ] Enriched LLM prompt: user params + deals + local helpers
+- [x] `GET profiles?is_local_helper=true&region=` sorgusunu trip generate'e entegre et (`_inject_local_helpers`)
+- [ ] Enriched LLM prompt: user params + deals (opportunities henüz eklenmedi)
 - [ ] LLM "repair" stratejisi (Pydantic validation başarısız olursa ikinci çağrı)
 - [ ] Thinking Mode için senkron timeout yönetimi (10–20s)
 
@@ -67,7 +67,7 @@
 - [x] `/planner/[id]` — kaydedilmiş itinerary detay sayfası
 - [ ] Local Helper opt-in sorusu (7. parametre olarak chat'e ekle)
 - [ ] Itinerary'de Company Opportunities highlight kartları
-- [ ] Itinerary'de Local Helper slot kartı (booking CTA)
+- [x] Itinerary'de Local Helper slot kartı (booking CTA) — `LocalHelperCard` + `HelperModal`
 
 ### DB/Schema Tasks
 - [x] `trips` tablosu — `itinerary_data JSONB` (migration `0001`)
@@ -192,37 +192,37 @@
 
 ## EPIC 6 — Local Help (Yerel Rehberlik)
 
-**Durum:** `[ ]` Henüz başlanmadı
+**Durum:** `[x]` Tamamlandı (Jun 3, 2026) · `[ ]` Bildirim + ödeme Faz 2'ye bırakıldı
 
 ### User Stories
 - **US.6.1:** Bir kullanıcı olarak, kendi şehrimde lokal rehber olarak kaydolup gelen öğrencilerle eşleşmek istiyorum.
 - **US.6.2:** Gittiğim şehirde yerel bir öğrenciden rehberlik almak istiyorum.
 
 ### Backend Tasks
-- [ ] `PUT /profile/local-helper` — toggle + detayları güncelle (region, bio, availability)
-- [ ] `GET /locals?region={region}` — bölgedeki aktif helper'ları listele
-- [ ] `POST /locals/book/:helper_id` — booking talebi, availability kontrolü
-- [ ] `GET /locals/bookings` — booking geçmişi
-- [ ] AI planner enrichment: local helpers → itinerary slot injection
-- [ ] `schemas/locals.py` — Pydantic modelleri
+- [x] `PUT /locals/profile` — toggle + detayları güncelle (region, bio, availability)
+- [x] `GET /locals?region={region}` — bölgedeki aktif helper'ları listele
+- [x] `POST /locals/book/:helper_id` — booking talebi, UUID validasyonu + helper aktiflik kontrolü
+- [x] `GET /locals/bookings` — booking geçmişi (requester + helper rolleri ayrı)
+- [x] AI planner enrichment: `_inject_local_helpers()` — hedef şehirdeki helperlar Day 1'e `local_activity` olarak eklenir
+- [x] `schemas/locals.py` — `LocalHelperUpdate`, `LocalHelperProfile`, `BookingRequest`, `BookingResponse`, `BookingsListResponse`
 
 ### Frontend Tasks
-- [ ] Profile sayfasına "Be a Local Helper" toggle bileşeni
-- [ ] Helper detay formu — region, bio, availability picker
-- [ ] Itinerary'de Local Helper kart bileşeni (bio + "Connect" CTA)
-- [ ] Helper profil modal — detay görünümü + booking akışı
-- [ ] Booking onay ekranı — her iki tarafa bildirim senaryosu
-- [ ] Profile'da "My Bookings" bölümü
+- [x] Profile sayfasına "Be a Local Helper" toggle bileşeni
+- [x] Helper detay formu — region input, bio textarea, availability input
+- [x] `components/locals/local-helper-card.tsx` — avatar, bio, meta + "Connect" CTA
+- [x] `components/locals/helper-modal.tsx` — detay modal + booking formu + success state
+- [x] Booking onay ekranı — modal success state (her iki tarafa bildirim Faz 2)
+- [x] Profile'da "My Bookings" bölümü — pending/accepted/declined badge'leri ile liste
 
 ### DB/Schema Tasks
-- [ ] `profiles` tablosuna alanlar ekle: `is_local_helper`, `helper_region`, `helper_bio`, `helper_availability` (migration `0003`)
-- [ ] Helper booking tablosu (Faz 2 — ödeme entegrasyonu ile birlikte)
+- [x] `profiles` tablosuna alanlar eklendi: `is_local_helper`, `helper_region`, `helper_bio`, `helper_availability` (migration `0004`)
+- [x] `local_bookings` tablosu oluşturuldu — temel booking akışı (ödeme kolonları Faz 2'ye bırakıldı)
 
 ### Kabul Kriterleri
-- [ ] Toggle açıldıktan sonra helper o bölge için AI planner'da görünür
-- [ ] AI itinerary'e uygun helper'ı otomatik olarak slot olarak ekler
-- [ ] Booking → her iki tarafa bildirim gönderilir
-- [ ] Booking trip timeline'ında gösterilir
+- [x] Toggle açıldıktan sonra helper o bölge için AI planner'da görünür
+- [x] AI itinerary'e uygun helper'ı otomatik olarak slot olarak ekler
+- [ ] Booking → her iki tarafa bildirim gönderilir (Faz 2 — push notification altyapısı)
+- [x] Booking profil sayfasında "My Bookings" listesinde gösterilir
 
 ---
 
@@ -233,7 +233,8 @@
 | `0001_profiles_trips_rls.sql` | `profiles` + `trips` + RLS | [x] Tamamlandı |
 | `0002_events_tickets.sql` | `tickets` tablosu | [x] Tamamlandı |
 | `0003_opportunities.sql` | `opportunities` tablosu + RLS + seed data (8 fırsat) | [x] Tamamlandı |
-| `0004_new_features.sql` | `experiences`, `experience_likes` + `profiles` yeni alanları (`is_local_helper` vb.) + `trips` yeni alanları | [ ] Bekliyor |
+| `0004_local_helpers.sql` | `profiles` yeni alanları (`is_local_helper`, `helper_region`, `helper_bio`, `helper_availability`) + `local_bookings` tablosu + RLS | [x] Tamamlandı |
+| `0005_experiences.sql` | `experiences`, `experience_likes` + `trips` yeni alanları (`is_cloned`, `cloned_from`) | [ ] Bekliyor |
 
 ---
 
@@ -269,13 +270,15 @@ Experiences
   POST   /experiences/:id/save
 
 Locals
+  PUT    /locals/profile
   GET    /locals
   POST   /locals/book/:helper_id
   GET    /locals/bookings
 
 Profile
-  GET    /profile/me
-  PUT    /profile/local-helper
+  GET    /users/me
+  PUT    /users/me
+  DELETE /users/me
 
 Health
   GET    /api/health

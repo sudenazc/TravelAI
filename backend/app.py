@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-from routers import auth, opportunities, tickets, trips, users
+from routers import auth, locals, opportunities, tickets, trips, users
 
 
 @asynccontextmanager
@@ -45,6 +45,7 @@ app.include_router(users.router)
 app.include_router(trips.router)
 app.include_router(tickets.router)
 app.include_router(opportunities.router)
+app.include_router(locals.router)
 
 
 @app.get("/health", tags=["Health"])
@@ -72,7 +73,7 @@ def custom_openapi():
         for operation in path_item.values():
             if isinstance(operation, dict):
                 tags = operation.get("tags", [])
-                if "Users" in tags:
+                if "Users" in tags or "Local Helpers" in tags:
                     operation["security"] = [{"BearerAuth": []}]
     app.openapi_schema = schema
     return schema

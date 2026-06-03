@@ -150,22 +150,42 @@
 
 ---
 
+### EPIC 6 — Local Help (Yerel Rehberlik)
+- **Tarih:** Jun 3, 2026
+- **İçerik:**
+  - `supabase/migrations/0004_local_helpers.sql` — `profiles` tablosuna 4 kolon (`is_local_helper`, `helper_region`, `helper_bio`, `helper_availability`); `local_bookings` tablosu (requester/helper FK, status check, no-self-booking constraint) + RLS politikaları
+  - `backend/schemas/locals.py` — `LocalHelperUpdate`, `LocalHelperProfile`, `LocalHelperListResponse`, `BookingRequest`, `BookingResponse`, `BookingsListResponse`
+  - `backend/schemas/user.py` — `UserProfile`'a 4 yeni opsiyonel helper field eklendi
+  - `backend/routers/locals.py` — 4 endpoint: `PUT /locals/profile`, `GET /locals?region=`, `POST /locals/book/{helper_id}`, `GET /locals/bookings`
+  - `backend/routers/trips.py` — `_inject_local_helpers()`: trip oluşturulurken hedef şehirdeki aktif helperlar Day 1'e `local_activity` slotu olarak eklenir (konum `helper_id:<uuid>` formatında saklanır)
+  - `backend/app.py` — `locals` router kaydedildi; Swagger'da `BearerAuth` güvenliği eklendi
+  - `frontend/src/components/locals/local-helper-card.tsx` — initials avatar, bio, region/availability meta, "Connect" CTA
+  - `frontend/src/components/locals/helper-modal.tsx` — helper detay modal; mesaj textarea + `POST /locals/book/:id` entegrasyonu; idle/loading/success 3-state akışı
+  - `frontend/src/components/locals/index.ts` — barrel export
+  - `frontend/src/app/profile/page.tsx` — "Be a Local Helper" toggle + koşullu detay formu; `PUT /locals/profile` kaydetme; "My Bookings" bölümü (pending/accepted/declined badge)
+  - `frontend/src/app/planner/[id]/page.tsx` — `parseHelperFromActivity()` ile `local_activity` slotları `LocalHelperCard` olarak render edilir; "Connect" → `HelperModal`
+- **Karar:** `local_bookings` tablosu ödeme kolonları olmadan oluşturuldu; Stripe entegrasyonu Faz 2'ye bırakıldı
+- **Karar:** Helper kimliği `ActivityItem.location` alanına `helper_id:<uuid>` prefiksiyle gömüldü; bu sayede AI prompt'u değiştirmeden parse edilebiliyor
+- **Kapsam dışı bırakılan (Faz 2):** Push notification (booking kabul/ret bildirimleri), ödeme entegrasyonu
+- **Hata & Düzeltme:** `POST /locals/book/{helper_id}` endpoint'ine AI üretimi gerçek adres metni (`Mühlenstr. 3-100`) gönderilince Postgres UUID parse hatası oluştu. İki katmanlı düzeltme: (1) `parseHelperFromActivity` — `helper_id:` prefiksi olmayan `local_activity` slotlarını artık helper olarak işlemiyor; (2) `routers/locals.py` — `book_local_helper` endpoint'ine DB sorgusundan önce UUID format validasyonu eklendi
+
+---
+
 ## Devam Eden İşler
 
 ### `[~]` EPIC 2 — Cost Optimized Trip Enrichment
-- Temel AI planner çalışıyor; Company Opportunities + Local Help entegrasyonu bekliyor
+- Temel AI planner çalışıyor; Company Opportunities enrichment bekliyor
+- Local Helper enrichment (`_inject_local_helpers`) **tamamlandı** (EPIC 6 kapsamında)
 - Yapılacak:
   - [ ] Opportunities sorgusunu itinerary generate'e entegre et
-  - [ ] Local Helper sorgusunu prompt context'e ekle
   - [ ] Enriched LLM prompt testi
 
 ---
 
 ## Bekleyen İşler
 
-### `[ ]` DB Migration 0004 — Yeni Tablolar
+### `[ ]` DB Migration 0005 — Experiences Tabloları
 - `experiences` + `experience_likes` tabloları
-- `profiles` tablosuna: `is_local_helper`, `helper_region`, `helper_bio`, `helper_availability`
 - `trips` tablosuna: `is_cloned`, `cloned_from`
 
 ---
@@ -182,23 +202,10 @@
 
 ---
 
-### `[ ]` EPIC 6 — Local Help
-- [ ] `PUT /profile/local-helper` — toggle + bölge/bio/availability
-- [ ] `GET /locals?region=` — aktif helper'lar
-- [ ] `POST /locals/book/:helper_id` — booking
-- [ ] `GET /locals/bookings` — booking geçmişi
-- [ ] Frontend: Profile'da "Be a Local Helper" toggle
-- [ ] Frontend: Helper detay formu (bölge, bio, availability picker)
-- [ ] Frontend: Itinerary'de Local Helper slot kartı + "Connect" CTA
-- [ ] Frontend: Helper profil modal + booking onay ekranı
-- [ ] Frontend: Profile'da "My Bookings" bölümü
-
----
-
 ## Hatalar & Notlar
 
 > Bu bölüme geliştirme sırasında karşılaşılan hatalar, alınan kararlar ve önemli notlar eklenecek.
 
 | Tarih | Bileşen | Açıklama | Çözüm |
 |---|---|---|---|
-| — | — | — | — |
+| Jun 3, 2026 | `routers/locals.py` + `planner/[id]/page.tsx` | AI üretimi `local_activity` slotundaki gerçek adres metni (`Mühlenstr. 3-100`) `helper_id` olarak DB'ye gönderildi → Postgres UUID parse hatası (500) | Frontend'de `parseHelperFromActivity` yalnızca `helper_id:` prefiksi olan slotları helper olarak işliyor; backend'de UUID format guard clause eklendi (400 döndürür) |

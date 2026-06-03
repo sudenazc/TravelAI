@@ -7,6 +7,7 @@ from core.config import get_settings
 from db.supabase import get_admin_client
 from dependencies import get_current_user
 from schemas.trips import (
+    ActivityItem,
     GenerateTripRequest,
     ItineraryData,
     TripResponse,
@@ -185,6 +186,50 @@ async def _call_openrouter(req: GenerateTripRequest) -> ItineraryData:
     )
 
 
+async def _inject_local_helpers(itinerary: ItineraryData, destination: str, db) -> ItineraryData:
+    """Query active local helpers for the destination and inject them as local_activity slots."""
+    try:
+        result = (
+            await db.table("profiles")
+            .select("id, full_name, helper_bio, helper_availability")
+            .eq("is_local_helper", True)
+            .ilike("helper_region", f"%{destination}%")
+            .limit(2)
+            .execute()
+        )
+        helpers = result.data or []
+    except Exception:
+        logger.warning("Could not fetch local helpers for '%s'; skipping enrichment.", destination)
+        return itinerary
+
+    if not helpers or not itinerary.days:
+        return itinerary
+
+    new_slots: list[ActivityItem] = []
+    for helper in helpers:
+        name = helper.get("full_name") or "Local Student Guide"
+        bio = helper.get("helper_bio") or "A verified local student ready to show you around."
+        availability = helper.get("helper_availability") or "Contact to arrange"
+        helper_id = helper.get("id", "")
+        new_slots.append(
+            ActivityItem(
+                time="18:00",
+                name=f"Meet Local Guide — {name}",
+                type="local_activity",
+                description=f"{bio} | Availability: {availability}",
+                cost_est=0.0,
+                location=f"helper_id:{helper_id}",
+            )
+        )
+
+    # Inject slots into Day 1 (first available day)
+    first_day = itinerary.days[0]
+    updated_activities = first_day.activities + new_slots
+    updated_first_day = first_day.model_copy(update={"activities": updated_activities})
+    updated_days = [updated_first_day] + list(itinerary.days[1:])
+    return itinerary.model_copy(update={"days": updated_days})
+
+
 @router.post("/generate", response_model=TripResponse, status_code=status.HTTP_201_CREATED)
 async def generate_trip(
     req: GenerateTripRequest,
@@ -194,6 +239,9 @@ async def generate_trip(
     itinerary = await _call_openrouter(req)
 
     db = await get_admin_client()
+
+    # Enrich itinerary with local helpers matching the destination.
+    itinerary = await _inject_local_helpers(itinerary, req.destination, db)
 
     # Ensure a profile row exists — signup doesn't create it automatically.
     # upsert is idempotent so repeated calls are safe.

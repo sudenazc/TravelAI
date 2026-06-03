@@ -16,6 +16,8 @@ import {
 import { cn } from "@/lib/utils";
 import { TopNav } from "@/components/navigation";
 import { http } from "@/lib/http";
+import { LocalHelperCard, HelperModal } from "@/components/locals";
+import type { LocalHelper } from "@/components/locals";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -160,7 +162,55 @@ function BudgetBreakdown({ days }: { days: ItineraryDay[] }) {
   );
 }
 
-function ActivityCard({ activity }: { activity: ActivityItem }) {
+/** Parse helper metadata embedded in a local_activity slot by _inject_local_helpers.
+ *  Only slots whose location field has the "helper_id:<uuid>" prefix are treated as helpers;
+ *  AI-generated local_activity entries with a real address are rendered as plain activity cards.
+ */
+function parseHelperFromActivity(activity: ActivityItem): LocalHelper | null {
+  if (activity.type !== "local_activity") return null;
+
+  const rawId = activity.location ?? "";
+  if (!rawId.startsWith("helper_id:")) return null;
+  const helperId = rawId.slice("helper_id:".length).trim();
+  if (!helperId) return null;
+
+  const rawName = activity.name.replace(/^Meet Local Guide\s*[—-]\s*/i, "").trim();
+  const [bioPart, availPart] = activity.description.split(" | Availability: ");
+
+  return {
+    id: helperId,
+    full_name: rawName || null,
+    helper_region: "",
+    helper_bio: bioPart?.trim() || null,
+    helper_availability: availPart?.trim() || null,
+  };
+}
+
+function ActivityCard({
+  activity,
+  tripId,
+  onConnectHelper,
+}: {
+  activity: ActivityItem;
+  tripId: string;
+  onConnectHelper: (helper: LocalHelper) => void;
+}) {
+  const helper = parseHelperFromActivity(activity);
+
+  if (helper) {
+    return (
+      <div className="flex gap-4">
+        <div className="relative z-10 mt-1 flex size-9 shrink-0 items-center justify-center rounded-full text-base shadow-xs ring-2 bg-violet-50 ring-violet-200 text-violet-600">
+          🎓
+        </div>
+        <div className="flex-1">
+          <LocalHelperCard helper={helper} onConnect={onConnectHelper} />
+          <p className="mt-1 ml-1 font-mono text-xs text-neutral-400">{activity.time}</p>
+        </div>
+      </div>
+    );
+  }
+
   const color = ACTIVITY_COLOR[activity.type] ?? "bg-neutral-50 ring-neutral-200 text-neutral-600";
   return (
     <div className="flex gap-4">
@@ -270,6 +320,7 @@ export default function TripDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeDay, setActiveDay] = useState(1);
   const [copied, setCopied] = useState(false);
+  const [selectedHelper, setSelectedHelper] = useState<LocalHelper | null>(null);
 
   const fetchTrip = () => {
     setLoading(true);
@@ -315,6 +366,11 @@ export default function TripDetailPage() {
   return (
     <div className="min-h-screen bg-neutral-50">
       <TopNav />
+      <HelperModal
+        helper={selectedHelper}
+        tripId={tripId}
+        onClose={() => setSelectedHelper(null)}
+      />
 
       {/* ── Hero ── */}
       <div className="relative overflow-hidden bg-neutral-900">
@@ -474,7 +530,12 @@ export default function TripDetailPage() {
                 <div className="relative space-y-3">
                   <div className="absolute left-[18px] top-2 h-[calc(100%-16px)] w-0.5 bg-sky-100" />
                   {currentDay.activities.map((activity, idx) => (
-                    <ActivityCard key={idx} activity={activity} />
+                    <ActivityCard
+                      key={idx}
+                      activity={activity}
+                      tripId={tripId}
+                      onConnectHelper={setSelectedHelper}
+                    />
                   ))}
                 </div>
 
