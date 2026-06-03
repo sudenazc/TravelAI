@@ -112,7 +112,7 @@
 
 ## EPIC 4 — Company Opportunities (Genişletilmiş Askıda Bilet)
 
-**Durum:** `[~]` Temel tickets tamamlandı (`commits: 16af3c4, 66506ad, 31d269b`) · `[ ]` Opportunities genişletmesi bekliyor
+**Durum:** `[~]` Core opportunities tamamlandı · `[ ]` Push notification + AI enrichment Faz 2'ye bırakıldı
 
 ### User Stories
 - **US.4.1:** Bir kullanıcı olarak, seyahat ettiğim şehirdeki ücretsiz/indirimli fırsatları görüp claim etmek istiyorum.
@@ -121,33 +121,33 @@
 
 ### Backend Tasks
 - [x] `GET /tickets` — mevcut ticket listeleme
-- [x] `POST /tickets/claim/{id}` — claim işlemi (temel)
-- [ ] `opportunities` tablosu seed data ile doldur
-- [ ] `GET /opportunities?city={city}&category={category}` — filtreleme
-- [ ] `POST /opportunities/claim/:id` — concurrency lock ile claim
-- [ ] `GET /opportunities/wallet` — kullanıcının claim'leri + QR kodları
+- [x] `POST /tickets/purchase` — bilet satın alma (temel)
+- [x] `opportunities` tablosu seed data ile doldur (migration `0003`, 8 örnek fırsat)
+- [x] `GET /opportunities?city={city}&category={category}` — filtreleme (`ilike` city, exact category)
+- [x] `POST /opportunities/claim/{id}` — concurrency lock ile atomik claim (`claimed_by IS NULL` koşulu)
+- [x] `GET /opportunities/wallet` — kullanıcının claim'leri + `claim_code`
 - [ ] Push notification altyapısı (last-minute deals için, Faz 2)
 - [ ] AI planner enrichment: opportunities → itinerary slot injection
 
 ### Frontend Tasks
-- [x] `/tickets` — temel ticket listesi sayfası
+- [x] `/tickets` — Ticket Market + Opportunities segment switcher
 - [x] `components/tickets/buy-ticket-modal.tsx`
-- [x] `components/tickets/wallet-section.tsx`
-- [ ] Opportunities tab UI — kategori filtresi, kart listesi
-- [ ] Last-minute badge + countdown timer bileşeni
-- [ ] Claim flow modal → QR kodu göster
-- [ ] Profile Wallet'ta claimed opportunities listesi
+- [x] `components/tickets/wallet-section.tsx` — claimed opportunities alt bölümü eklendi
+- [x] `components/tickets/opportunity-card.tsx` — kategori badge, fiyat karşılaştırması, "Claim" butonu
+- [x] Last-minute badge + countdown timer bileşeni (`opportunity-card.tsx` içinde)
+- [x] `components/tickets/claim-modal.tsx` — claim akışı + `claim_code` gösterimi
+- [x] Profile Wallet'ta claimed opportunities listesi (wallet-section güncellendi)
 
 ### DB/Schema Tasks
 - [x] `tickets` tablosu (migration `0002`)
-- [ ] `opportunities` tablosu + RLS (migration `0003`)
-- [ ] `is_last_minute`, `event_date`, `offer_price` alanları
+- [x] `opportunities` tablosu + RLS (migration `0003`)
+- [x] `is_last_minute`, `event_date`, `offer_price` alanları
 
 ### Kabul Kriterleri
-- [ ] Fırsatlar kategoriye göre filtrelenebilir
-- [ ] Claim edilince `status` anlık güncellenir (ikinci claim başarısız olur)
-- [ ] Claim sonrası QR / referans kodu Profile Wallet'ta görünür
-- [ ] AI itinerary'de uygun fırsatlar highlight edilmiş gösterilir
+- [x] Fırsatlar kategoriye ve şehre göre filtrelenebilir
+- [x] Claim edilince `status` anlık güncellenir (ikinci claim başarısız olur — 409)
+- [x] Claim sonrası `claim_code` referansı Wallet'ta görünür
+- [ ] AI itinerary'de uygun fırsatlar highlight edilmiş gösterilir (Faz 2)
 
 ---
 
@@ -232,7 +232,8 @@
 |---|---|---|
 | `0001_profiles_trips_rls.sql` | `profiles` + `trips` + RLS | [x] Tamamlandı |
 | `0002_events_tickets.sql` | `tickets` tablosu | [x] Tamamlandı |
-| `0003_new_features.sql` | `opportunities`, `experiences`, `experience_likes` + `profiles` yeni alanları + `trips` yeni alanları | [ ] Bekliyor |
+| `0003_opportunities.sql` | `opportunities` tablosu + RLS + seed data (8 fırsat) | [x] Tamamlandı |
+| `0004_new_features.sql` | `experiences`, `experience_likes` + `profiles` yeni alanları (`is_local_helper` vb.) + `trips` yeni alanları | [ ] Bekliyor |
 
 ---
 

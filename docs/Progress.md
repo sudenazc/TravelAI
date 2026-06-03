@@ -118,6 +118,24 @@
 
 ---
 
+### EPIC 4 — Company Opportunities (Core)
+- **Tarih:** Jun 3, 2026
+- **İçerik:**
+  - `supabase/migrations/0003_opportunities.sql` — `opportunities` tablosu, RLS, 8 seed fırsat (2 tanesi `is_last_minute = TRUE`)
+  - `backend/schemas/opportunities.py` — `OpportunityResponse`, `ClaimedOpportunityResponse` Pydantic modelleri
+  - `backend/routers/opportunities.py` — `GET /opportunities` (city `ilike` + category filtresi), `POST /opportunities/claim/{id}` (atomik concurrency lock), `GET /opportunities/wallet`
+  - `backend/app.py` — `opportunities` router kaydedildi
+  - `frontend/src/types/tickets.ts` — `OpportunityCategory`, `OpportunityStatus`, `OpportunityResponse`, `ClaimedOpportunityResponse` tipleri eklendi
+  - `frontend/src/components/tickets/opportunity-card.tsx` — kategori badge, şehir/sağlayıcı bilgisi, fiyat karşılaştırması (üstü çizgili orijinal → ücretsiz/indirimli), last-minute canlı countdown timer
+  - `frontend/src/components/tickets/claim-modal.tsx` — `confirm → loading → success` akışı; success state'de `claim_code` monospace gösterimi
+  - `frontend/src/app/tickets/page.tsx` — "Ticket Market" / "Opportunities" segment switcher; şehir input filtresi + kategori chip'leri; tüm claim state yönetimi
+  - `frontend/src/components/tickets/wallet-section.tsx` — "My Claimed Opportunities" alt bölümü eklendi; her satırda `claim_code` etiketi
+- **Karar:** Concurrency lock için Supabase service-role UPDATE + `claimed_by IS NULL` koşulu kullanıldı; ayrı transaction/lock mekanizması gerekmedi
+- **Karar:** QR kod için harici kütüphane yerine monospace `claim_code` metin kutusu tercih edildi (sıfır bağımlılık)
+- **Kapsam dışı bırakılan (Faz 2):** Push notification altyapısı, AI planner → opportunities enrichment
+
+---
+
 ### Dokümantasyon Konsolidasyonu
 - **İçerik:**
   - Tüm dokümantasyon `docs/` altında 5 zorunlu dosyada birleştirildi:
@@ -145,22 +163,10 @@
 
 ## Bekleyen İşler
 
-### `[ ]` DB Migration 0003 — Yeni Tablolar
-- `opportunities` tablosu + RLS
+### `[ ]` DB Migration 0004 — Yeni Tablolar
 - `experiences` + `experience_likes` tabloları
 - `profiles` tablosuna: `is_local_helper`, `helper_region`, `helper_bio`, `helper_availability`
 - `trips` tablosuna: `is_cloned`, `cloned_from`
-
----
-
-### `[ ]` EPIC 4 — Company Opportunities Genişletmesi
-- [ ] `opportunities` tablosu seed data ile doldur
-- [ ] `GET /opportunities?city=&category=` endpoint'i
-- [ ] `POST /opportunities/claim/:id` — concurrency lock
-- [ ] `GET /opportunities/wallet` — QR kodlu claim listesi
-- [ ] Frontend: Opportunities tab UI, kategori filtresi, claim modal, QR gösterimi
-- [ ] Frontend: Profile Wallet'ta claimed fırsatlar
-- [ ] Last-minute badge + countdown timer bileşeni
 
 ---
 
