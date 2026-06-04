@@ -12,12 +12,19 @@ import {
   AlertCircle,
   Share2,
   Plus,
+  Tag,
+  Ticket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TopNav } from "@/components/navigation";
 import { http } from "@/lib/http";
 import { LocalHelperCard, HelperModal } from "@/components/locals";
 import type { LocalHelper } from "@/components/locals";
+import { ClaimModal } from "@/components/tickets/claim-modal";
+import type {
+  ClaimedOpportunityResponse,
+  OpportunityResponse,
+} from "@/types/tickets";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -246,6 +253,98 @@ function ActivityCard({
   );
 }
 
+function OpportunityHighlightCard({
+  opportunity,
+  onClaim,
+}: {
+  opportunity: OpportunityResponse;
+  onClaim: (opp: OpportunityResponse) => void;
+}) {
+  const priceDisplay = opportunity.is_free
+    ? "Free"
+    : opportunity.offer_price != null
+    ? `$${opportunity.offer_price.toLocaleString()}`
+    : null;
+
+  const originalDisplay =
+    !opportunity.is_free && opportunity.original_price != null
+      ? `$${opportunity.original_price.toLocaleString()}`
+      : null;
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-white p-3 shadow-xs transition-shadow hover:shadow-md">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-50">
+        <Ticket className="size-4 text-sky-500" strokeWidth={1.75} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-neutral-800">
+          {opportunity.title}
+        </p>
+        <div className="mt-0.5 flex items-center gap-2">
+          <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-500">
+            {opportunity.category}
+          </span>
+          {opportunity.provider_name && (
+            <span className="truncate text-[11px] text-neutral-400">
+              {opportunity.provider_name}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        {originalDisplay && (
+          <span className="text-[11px] text-neutral-400 line-through">
+            {originalDisplay}
+          </span>
+        )}
+        {priceDisplay && (
+          <span
+            className={cn(
+              "text-sm font-bold",
+              opportunity.is_free ? "text-emerald-600" : "text-sky-600"
+            )}
+          >
+            {priceDisplay}
+          </span>
+        )}
+        <button
+          onClick={() => onClaim(opportunity)}
+          className="mt-1 flex items-center gap-1 rounded-lg bg-sky-500 px-2.5 py-1 text-xs font-semibold text-white transition-all hover:bg-sky-600 active:scale-95"
+        >
+          <Tag className="size-3" strokeWidth={2} />
+          Claim
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DealsSection({
+  opportunities,
+  onClaim,
+}: {
+  opportunities: OpportunityResponse[];
+  onClaim: (opp: OpportunityResponse) => void;
+}) {
+  if (opportunities.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-5 shadow-xs">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-lg">🎟️</span>
+        <p className="text-xs font-semibold uppercase tracking-widest text-sky-700">
+          Deals at your destination
+        </p>
+      </div>
+      <div className="space-y-2">
+        {opportunities.map((opp) => (
+          <OpportunityHighlightCard key={opp.id} opportunity={opp} onClaim={onClaim} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LoadingSkeleton() {
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -322,6 +421,19 @@ export default function TripDetailPage() {
   const [copied, setCopied] = useState(false);
   const [selectedHelper, setSelectedHelper] = useState<LocalHelper | null>(null);
 
+  // Opportunities / deals state
+  const [opportunities, setOpportunities] = useState<OpportunityResponse[]>([]);
+  const [claimTarget, setClaimTarget] = useState<OpportunityResponse | null>(null);
+  const [claimState, setClaimState] = useState<"confirm" | "loading" | "success">("confirm");
+  const [claimedData, setClaimedData] = useState<ClaimedOpportunityResponse | null>(null);
+
+  const fetchOpportunities = (destination: string) => {
+    http
+      .get<OpportunityResponse[]>(`/opportunities?city=${encodeURIComponent(destination)}`)
+      .then((data) => setOpportunities((data ?? []).slice(0, 3)))
+      .catch(() => {/* non-critical — silently skip */});
+  };
+
   const fetchTrip = () => {
     setLoading(true);
     setError(null);
@@ -330,6 +442,7 @@ export default function TripDetailPage() {
       .then((data) => {
         setTrip(data);
         setActiveDay(data.itinerary_data.days[0]?.day ?? 1);
+        fetchOpportunities(data.destination);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -339,6 +452,34 @@ export default function TripDetailPage() {
     if (tripId) fetchTrip();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
+
+  const handleOpenClaim = (opp: OpportunityResponse) => {
+    setClaimTarget(opp);
+    setClaimState("confirm");
+    setClaimedData(null);
+  };
+
+  const handleConfirmClaim = () => {
+    if (!claimTarget) return;
+    setClaimState("loading");
+    http
+      .post<ClaimedOpportunityResponse>(`/opportunities/claim/${claimTarget.id}`, {})
+      .then((data) => {
+        setClaimedData(data);
+        setClaimState("success");
+        setOpportunities((prev) => prev.filter((o) => o.id !== claimTarget.id));
+      })
+      .catch(() => {
+        setClaimState("confirm");
+      });
+  };
+
+  const handleCloseClaim = () => {
+    if (claimState === "loading") return;
+    setClaimTarget(null);
+    setClaimedData(null);
+    setClaimState("confirm");
+  };
 
   const handleShare = async () => {
     try {
@@ -370,6 +511,13 @@ export default function TripDetailPage() {
         helper={selectedHelper}
         tripId={tripId}
         onClose={() => setSelectedHelper(null)}
+      />
+      <ClaimModal
+        opportunity={claimTarget}
+        state={claimState}
+        claimedData={claimedData}
+        onConfirm={handleConfirmClaim}
+        onClose={handleCloseClaim}
       />
 
       {/* ── Hero ── */}
@@ -574,6 +722,16 @@ export default function TripDetailPage() {
               )}
               <BudgetBreakdown days={itinerary.days} />
             </div>
+
+            {/* Opportunities / deals at destination */}
+            {opportunities.length > 0 && (
+              <div className="mt-6">
+                <DealsSection
+                  opportunities={opportunities}
+                  onClaim={handleOpenClaim}
+                />
+              </div>
+            )}
 
             {/* Footer actions */}
             <div className="mt-10 flex flex-col items-center gap-3 border-t border-neutral-200 pt-8 sm:flex-row sm:justify-between">

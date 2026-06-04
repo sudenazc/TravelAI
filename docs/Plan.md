@@ -42,7 +42,7 @@
 
 ## EPIC 2 — AI Trip Planner + Cost Optimized Trip
 
-**Durum:** `[x]` Temel planner tamamlandı (`commits: 1cffbd3, 27a54fb`) · `[ ]` Cost Optimization + Enriched Prompt bekliyor
+**Durum:** `[x]` Tamamlandı (`commits: 1cffbd3, 27a54fb` + Jun 4, 2026 enrichment)
 
 ### User Stories
 - **US.2.1:** Bir kullanıcı olarak, bütçeme uygun, saatlik ve kültürel odaklı bir rota almak istiyorum.
@@ -51,12 +51,13 @@
 ### Backend Tasks
 - [x] `POST /itinerary/generate` — temel LLM çağrısı, Pydantic validation
 - [x] OpenRouter entegrasyonu (model-agnostic)
-- [x] `schemas/itinerary.py` — request/response Pydantic modelleri
-- [ ] `GET opportunities?city=&dates=` sorgusunu itinerary generate içine entegre et
+- [x] `schemas/trips.py` — request/response Pydantic modelleri
+- [x] `GET opportunities?city=` sorgusunu itinerary generate içine entegre et (`_fetch_opportunities`)
 - [x] `GET profiles?is_local_helper=true&region=` sorgusunu trip generate'e entegre et (`_inject_local_helpers`)
-- [ ] Enriched LLM prompt: user params + deals (opportunities henüz eklenmedi)
-- [ ] LLM "repair" stratejisi (Pydantic validation başarısız olursa ikinci çağrı)
-- [ ] Thinking Mode için senkron timeout yönetimi (10–20s)
+- [x] Enriched LLM prompt: user params + deals (`_build_user_prompt` opportunities bloğu ile genişletildi)
+- [x] LLM "repair" stratejisi — parse hata → aynı model ile 2. çağrı (`_repair_call`)
+- [x] Thinking Mode için model başına 20s read timeout (`httpx.Timeout`, `TimeoutException` catch)
+- [x] `want_local_helper: bool` alanı `GenerateTripRequest`'e eklendi; `_inject_local_helpers` opt-in koşuluna bağlandı
 
 ### Frontend Tasks
 - [x] `/planner` — chat-first parametre toplama ekranı
@@ -65,19 +66,19 @@
 - [x] Thinking Mode animasyonu (skeleton + loading state)
 - [x] Itinerary render: günlük kartlar, bütçe özeti
 - [x] `/planner/[id]` — kaydedilmiş itinerary detay sayfası
-- [ ] Local Helper opt-in sorusu (7. parametre olarak chat'e ekle)
-- [ ] Itinerary'de Company Opportunities highlight kartları
+- [x] Local Helper opt-in sorusu (8. parametre olarak chat'e eklendi) — `parseWantLocalHelper` + `want_local_helper` payload'a dahil
+- [x] Itinerary'de Company Opportunities highlight kartları — `OpportunityHighlightCard` + `DealsSection` + `ClaimModal` entegrasyonu
 - [x] Itinerary'de Local Helper slot kartı (booking CTA) — `LocalHelperCard` + `HelperModal`
 
 ### DB/Schema Tasks
 - [x] `trips` tablosu — `itinerary_data JSONB` (migration `0001`)
-- [ ] `trips` tablosuna `is_cloned`, `cloned_from` alanları ekle (migration `0003`)
+- [x] `trips` tablosuna `is_cloned`, `cloned_from` alanları eklendi (migration `0005`)
 
 ### Kabul Kriterleri
-- [x] 7 parametre tamamlanmadan Thinking Mode tetiklenmez
-- [x] LLM her zaman geçerli JSON döndürür
-- [ ] Itinerary'de Company Opportunities ve Local Helper slotları görünür
-- [ ] Enriched prompt üretimi test edilir (unit test)
+- [x] 8 parametre tamamlanmadan Thinking Mode tetiklenmez
+- [x] LLM her zaman geçerli JSON döndürür (repair stratejisi ile güçlendirildi)
+- [x] Itinerary'de Company Opportunities ve Local Helper slotları görünür
+- [ ] Enriched prompt üretimi test edilir (unit test) — Faz 2'ye bırakıldı
 
 ---
 
@@ -234,7 +235,8 @@
 | `0002_events_tickets.sql` | `tickets` tablosu | [x] Tamamlandı |
 | `0003_opportunities.sql` | `opportunities` tablosu + RLS + seed data (8 fırsat) | [x] Tamamlandı |
 | `0004_local_helpers.sql` | `profiles` yeni alanları (`is_local_helper`, `helper_region`, `helper_bio`, `helper_availability`) + `local_bookings` tablosu + RLS | [x] Tamamlandı |
-| `0005_experiences.sql` | `experiences`, `experience_likes` + `trips` yeni alanları (`is_cloned`, `cloned_from`) | [ ] Bekliyor |
+| `0005_trips_clone.sql` | `trips` yeni alanları: `is_cloned`, `cloned_from` | [x] Tamamlandı |
+| `0006_experiences.sql` | `experiences`, `experience_likes` tabloları | [ ] Bekliyor |
 
 ---
 

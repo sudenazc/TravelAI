@@ -12,6 +12,7 @@ class GenerateTripRequest(BaseModel):
     budget_usd: int = Field(..., ge=50)
     transport_pref: str
     interests: list[str] = Field(..., min_length=1)
+    want_local_helper: bool = True
 
 
 class ActivityItem(BaseModel):

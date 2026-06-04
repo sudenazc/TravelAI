@@ -78,6 +78,7 @@ interface GenerateTripParams {
   budget_usd: number;
   transport_pref: string;
   interests: string[];
+  want_local_helper: boolean;
 }
 
 // ── Parameter collection steps ───────────────────────────────────────────────
@@ -86,6 +87,10 @@ interface ParamStep {
   question: string;
   key: keyof GenerateTripParams | "route";
   chips?: string[];
+}
+
+function parseWantLocalHelper(input: string): boolean {
+  return /\byes\b|yeah|sure|connect|absolutely|please|ok\b/i.test(input);
 }
 
 const PARAM_STEPS: ParamStep[] = [
@@ -127,7 +132,7 @@ const PARAM_STEPS: ParamStep[] = [
   {
     key: "interests",
     question:
-      "Last one — what are your main interests? (comma-separated, e.g. history, local food, nightlife)",
+      "Almost there — what are your main interests? (comma-separated, e.g. history, local food, nightlife)",
     chips: [
       "Culture & history",
       "Local food & cafes",
@@ -135,6 +140,12 @@ const PARAM_STEPS: ParamStep[] = [
       "Nightlife",
       "Art & museums",
     ],
+  },
+  {
+    key: "want_local_helper",
+    question:
+      "Last one — would you like to be connected with a local student guide at your destination? They can show you hidden gems for free!",
+    chips: ["Yes, connect me!", "No thanks"],
   },
 ];
 
@@ -173,7 +184,7 @@ const INITIAL_MESSAGES: Message[] = [
     id: "welcome",
     role: "ai",
     content:
-      "Hi! ✈️ I'm your AI travel assistant. I'll ask you 7 quick questions, then build a personalised student-friendly itinerary — day-by-day, budget-optimised, and full of local gems.",
+      "Hi! ✈️ I'm your AI travel assistant. I'll ask you 8 quick questions, then build a personalised student-friendly itinerary — day-by-day, budget-optimised, and full of local gems.",
   },
   {
     id: "q0",
@@ -258,6 +269,8 @@ export default function PlannerPage() {
       updatedParams = { ...updatedParams, budget_usd: budget > 0 ? budget : 500 };
     } else if (step.key === "interests") {
       updatedParams = { ...updatedParams, interests: parseInterests(text) };
+    } else if (step.key === "want_local_helper") {
+      updatedParams = { ...updatedParams, want_local_helper: parseWantLocalHelper(text) };
     } else {
       (updatedParams as Record<string, unknown>)[step.key] = text;
     }
@@ -676,7 +689,7 @@ function EmptyPanel({ isGenerating }: { isGenerating: boolean }) {
         <p className="mt-2 max-w-sm text-sm text-neutral-500">
           {isGenerating
             ? "The AI is crafting a personalised day-by-day plan. This usually takes 15–30 seconds."
-            : "Answer the 7 questions in the chat and watch your personalised itinerary come to life."}
+            : "Answer the 8 questions in the chat and watch your personalised itinerary come to life."}
         </p>
       </div>
       {!isGenerating && (

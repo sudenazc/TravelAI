@@ -150,6 +150,24 @@
 
 ---
 
+### EPIC 2 — AI Trip Planner Cost Optimization + Enrichment
+- **Tarih:** Jun 4, 2026
+- **İçerik:**
+  - `backend/schemas/trips.py` — `GenerateTripRequest`'e `want_local_helper: bool = True` alanı eklendi
+  - `backend/routers/trips.py` — `_fetch_opportunities()`: generate çağrısından önce destination'a ait max 5 fırsatı DB'den çeker
+  - `backend/routers/trips.py` — `_build_user_prompt()` genişletildi: opportunities varsa prompt'a `Available deals in {city}:` bloğu eklenir; LLM bunları itinerary aktivitelerine dahil etmesi için yönlendirilir
+  - `backend/routers/trips.py` — `_repair_call()`: parse hatası alındığında aynı model ile ikinci çağrı yapılır; hatalı JSON + hata mesajı gönderilir, düzeltilmiş JSON beklenir
+  - `backend/routers/trips.py` — `httpx.AsyncClient` global `timeout=90s` kaldırıldı; her model çağrısı `MODEL_TIMEOUT = Timeout(connect=5s, read=20s)` ile yapılır; `TimeoutException` yakalanınca sonraki modele geçilir
+  - `backend/routers/trips.py` — `generate_trip()`: `req.want_local_helper` `False` ise `_inject_local_helpers` atlanır
+  - `frontend/src/app/planner/page.tsx` — `GenerateTripParams`'a `want_local_helper: boolean` eklendi; `PARAM_STEPS`'e 8. adım (local guide opt-in sorusu, "Yes, connect me!" / "No thanks" chip'leri); `parseWantLocalHelper()` fonksiyonu; karşılama mesajı ve boş panel metni "7 → 8 soru" güncellendi
+  - `frontend/src/app/planner/[id]/page.tsx` — `OpportunityHighlightCard` ve `DealsSection` bileşenleri eklendi; trip yüklenince `GET /opportunities?city=` çağrılır (max 3); `ClaimModal` entegre edildi; claim sonrası o opportunity listeden kaldırılır
+  - `supabase/migrations/0005_trips_clone.sql` — `trips` tablosuna `is_cloned boolean DEFAULT false` ve `cloned_from uuid REFERENCES trips(id) ON DELETE SET NULL` kolonları eklendi
+- **Karar:** Opportunities DB'den çekilip LLM prompt'una eklendi; doğrudan itinerary'ye injection yerine LLM'in bunları özgünce planlaması tercih edildi
+- **Karar:** Repair call aynı modelde `temperature=0.2` ile yapılır; başarısız olursa mevcut fallback zinciri devam eder — ekstra maliyet minimum tutuldu
+- **Karar:** `want_local_helper` default `True` olarak ayarlandı; mevcut oluşturulmuş trip'ler etkilenmez
+
+---
+
 ### EPIC 6 — Local Help (Yerel Rehberlik)
 - **Tarih:** Jun 3, 2026
 - **İçerik:**
@@ -173,20 +191,14 @@
 
 ## Devam Eden İşler
 
-### `[~]` EPIC 2 — Cost Optimized Trip Enrichment
-- Temel AI planner çalışıyor; Company Opportunities enrichment bekliyor
-- Local Helper enrichment (`_inject_local_helpers`) **tamamlandı** (EPIC 6 kapsamında)
-- Yapılacak:
-  - [ ] Opportunities sorgusunu itinerary generate'e entegre et
-  - [ ] Enriched LLM prompt testi
+_(Şu an aktif devam eden iş yok)_
 
 ---
 
 ## Bekleyen İşler
 
-### `[ ]` DB Migration 0005 — Experiences Tabloları
+### `[ ]` DB Migration 0006 — Experiences Tabloları
 - `experiences` + `experience_likes` tabloları
-- `trips` tablosuna: `is_cloned`, `cloned_from`
 
 ---
 

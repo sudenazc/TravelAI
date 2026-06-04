@@ -19,7 +19,7 @@ router = APIRouter(prefix="/trips", tags=["Trips"])
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Tried in order; next is used on 429, 404, or truncated/invalid JSON.
+# Tried in order; next is used on 429, 404, timeout, or invalid JSON.
 # Verified against openrouter.ai/models as of 2026-05.
 # Excludes thinking/reasoning models that wrap JSON in prose.
 FREE_MODELS = [
@@ -33,21 +33,29 @@ FREE_MODELS = [
     "meta-llama/llama-3.2-3b-instruct:free",  # smallest fallback
 ]
 
+# Per-model read timeout (seconds). Keeps the fallback chain responsive.
+MODEL_TIMEOUT = httpx.Timeout(connect=5.0, read=20.0, write=5.0, pool=5.0)
+
+REPAIR_SYSTEM = (
+    "You are a JSON repair assistant. "
+    "Return ONLY the corrected JSON object. "
+    "Do NOT add text, markdown, code fences, or any explanation."
+)
+
+
 def _extract_json_object(text: str) -> str:
     """
     Pull the first complete top-level JSON object out of `text`.
     Handles models that prepend reasoning prose or append trailing text.
     """
-    # Strip markdown fences first
     if "```" in text:
         lines = text.splitlines()
         text = "\n".join(l for l in lines if not l.startswith("```")).strip()
 
     start = text.find("{")
     if start == -1:
-        return text  # No JSON found — let caller raise the parse error
+        return text
 
-    # Walk backward from the end to find the matching closing brace
     depth = 0
     in_string = False
     escape_next = False
@@ -112,12 +120,30 @@ Rules:
 - Include at least one "local_activity" per trip that connects with local student life.
 - total_budget_est must reflect the sum of all cost_est values rounded to nearest dollar.
 - visa_info must reflect the real requirement for the given passport country.
+- If "Available deals" are listed in the user message, reference at least one of them in the itinerary as an activity with the provider name and discounted price.
 """
 
 
-def _build_user_prompt(req: GenerateTripRequest) -> str:
+async def _fetch_opportunities(destination: str, db) -> list[dict]:
+    """Return up to 5 available opportunities matching the destination city."""
+    try:
+        result = (
+            await db.table("opportunities")
+            .select("title, category, offer_price, is_free, provider_name, event_date")
+            .eq("status", "available")
+            .ilike("city", f"%{destination}%")
+            .limit(5)
+            .execute()
+        )
+        return result.data or []
+    except Exception:
+        logger.warning("Could not fetch opportunities for '%s'; skipping.", destination)
+        return []
+
+
+def _build_user_prompt(req: GenerateTripRequest, opportunities: list[dict] | None = None) -> str:
     interests = ", ".join(req.interests) if req.interests else "general sightseeing"
-    return (
+    prompt = (
         f"Plan a {req.duration_days}-day student trip from {req.origin} to {req.destination}. "
         f"Passport: {req.passport_country}. "
         f"Budget: ${req.budget_usd} USD total. "
@@ -126,8 +152,72 @@ def _build_user_prompt(req: GenerateTripRequest) -> str:
         f"Interests: {interests}."
     )
 
+    if opportunities:
+        lines: list[str] = []
+        for opp in opportunities:
+            name = opp.get("title", "Deal")
+            provider = opp.get("provider_name") or ""
+            category = opp.get("category", "")
+            if opp.get("is_free"):
+                price_str = "free"
+            elif opp.get("offer_price") is not None:
+                price_str = f"${opp['offer_price']:.0f}"
+            else:
+                price_str = "discounted"
+            line = f"- {name} ({category}"
+            if provider:
+                line += f" by {provider}"
+            line += f", {price_str})"
+            lines.append(line)
+        prompt += f"\n\nAvailable deals in {req.destination}:\n" + "\n".join(lines)
 
-async def _call_openrouter(req: GenerateTripRequest) -> ItineraryData:
+    return prompt
+
+
+async def _repair_call(
+    client: httpx.AsyncClient,
+    model: str,
+    raw_bad: str,
+    exc_msg: str,
+    headers: dict,
+) -> ItineraryData | None:
+    """Attempt to fix a malformed JSON response using the same model."""
+    repair_msgs = [
+        {"role": "system", "content": REPAIR_SYSTEM},
+        {
+            "role": "user",
+            "content": (
+                f"Fix this invalid JSON so it matches the itinerary schema.\n"
+                f"Error: {exc_msg}\n\n"
+                f"Broken JSON:\n{raw_bad}"
+            ),
+        },
+    ]
+    payload = {
+        "model": model,
+        "messages": repair_msgs,
+        "temperature": 0.2,
+        "max_tokens": 8192,
+        "response_format": {"type": "json_object"},
+    }
+    try:
+        resp = await client.post(
+            OPENROUTER_API_URL, json=payload, headers=headers, timeout=MODEL_TIMEOUT
+        )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        content = data["choices"][0]["message"].get("content", "")
+        if not content or len(content.strip()) < 50:
+            return None
+        content = _extract_json_object(content.strip())
+        return ItineraryData.model_validate_json(content)
+    except Exception as exc:
+        logger.debug("Repair call failed for %s: %s", model, exc)
+        return None
+
+
+async def _call_openrouter(req: GenerateTripRequest, opportunities: list[dict] | None = None) -> ItineraryData:
     settings = get_settings()
     headers = {
         "Authorization": f"Bearer {settings.openrouter_api_key}",
@@ -137,11 +227,12 @@ async def _call_openrouter(req: GenerateTripRequest) -> ItineraryData:
     }
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": _build_user_prompt(req)},
+        {"role": "user", "content": _build_user_prompt(req, opportunities)},
     ]
 
     last_error: str = "All models failed."
-    async with httpx.AsyncClient(timeout=90.0) as client:
+    # No global timeout — each post() call uses MODEL_TIMEOUT instead.
+    async with httpx.AsyncClient() as client:
         for model in FREE_MODELS:
             payload = {
                 "model": model,
@@ -150,7 +241,16 @@ async def _call_openrouter(req: GenerateTripRequest) -> ItineraryData:
                 "max_tokens": 8192,
                 "response_format": {"type": "json_object"},
             }
-            response = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
+
+            # --- primary call ---
+            try:
+                response = await client.post(
+                    OPENROUTER_API_URL, json=payload, headers=headers, timeout=MODEL_TIMEOUT
+                )
+            except httpx.TimeoutException:
+                logger.warning("Model %s timed out, trying next.", model)
+                last_error = f"{model} timed out."
+                continue
 
             if response.status_code in (429, 404):
                 logger.warning("Model %s unavailable (%s), trying next.", model, response.status_code)
@@ -176,8 +276,18 @@ async def _call_openrouter(req: GenerateTripRequest) -> ItineraryData:
             try:
                 return ItineraryData.model_validate_json(raw_content)
             except Exception as exc:
-                logger.error("Failed to parse response from %s: %s\nRaw: %s", model, exc, raw_content)
-                last_error = f"Model {model} returned invalid JSON."
+                logger.warning(
+                    "Parse failed for %s (%s). Attempting repair.", model, exc
+                )
+                # --- repair call: send the broken JSON back for correction ---
+                repaired = await _repair_call(client, model, raw_content, str(exc), headers)
+                if repaired is not None:
+                    logger.info("Repair succeeded for model %s.", model)
+                    return repaired
+                logger.error(
+                    "Repair failed for %s. Raw:\n%s", model, raw_content[:400]
+                )
+                last_error = f"Model {model} returned invalid JSON (repair also failed)."
                 continue
 
     raise HTTPException(
@@ -236,15 +346,18 @@ async def generate_trip(
     current_user: dict = Depends(get_current_user),
 ) -> TripResponse:
     """Generate an AI itinerary, persist it, and return the saved trip."""
-    itinerary = await _call_openrouter(req)
-
     db = await get_admin_client()
 
-    # Enrich itinerary with local helpers matching the destination.
-    itinerary = await _inject_local_helpers(itinerary, req.destination, db)
+    # Fetch destination-matching opportunities to enrich the LLM prompt.
+    opportunities = await _fetch_opportunities(req.destination, db)
+
+    itinerary = await _call_openrouter(req, opportunities)
+
+    # Optionally enrich itinerary with local helpers matching the destination.
+    if req.want_local_helper:
+        itinerary = await _inject_local_helpers(itinerary, req.destination, db)
 
     # Ensure a profile row exists — signup doesn't create it automatically.
-    # upsert is idempotent so repeated calls are safe.
     await db.table("profiles").upsert(
         {"id": current_user["sub"], "edu_email": current_user["email"]},
         on_conflict="id",
