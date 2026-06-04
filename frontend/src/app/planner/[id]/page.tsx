@@ -14,6 +14,7 @@ import {
   Plus,
   Tag,
   Ticket,
+  PenLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TopNav } from "@/components/navigation";
@@ -555,7 +556,7 @@ export default function TripDetailPage() {
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleShare}
                 className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/20 active:scale-95"
@@ -563,6 +564,13 @@ export default function TripDetailPage() {
                 <Share2 className="size-4" />
                 {copied ? "Copied!" : "Share"}
               </button>
+              <Link
+                href={`/experiences/new?trip_id=${tripId}`}
+                className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/20 active:scale-95"
+              >
+                <PenLine className="size-4" />
+                Share Experience
+              </Link>
               <Link
                 href="/planner"
                 className="flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-sky-600 active:scale-95"

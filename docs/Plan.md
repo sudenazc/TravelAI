@@ -154,40 +154,44 @@
 
 ## EPIC 5 — Share Experience & Learn From Others
 
-**Durum:** `[ ]` Henüz başlanmadı
+**Durum:** `[x]` Tamamlandı (Jun 4, 2026)
 
 ### User Stories
 - **US.5.1:** Bir kullanıcı olarak, gezi deneyimimi blog yazısıyla paylaşmak istiyorum.
 - **US.5.2:** Başkalarının gezilerini keşfedip kendi profilime kaydetmek istiyorum.
 
 ### Backend Tasks
-- [ ] `POST /experiences` — blog yayımla (trip_id + user_id bağlı)
-- [ ] `GET /experiences?city={city}&tags={tags}` — feed listele, filtrele
-- [ ] `GET /experiences/{id}` — yazı detayı
-- [ ] `POST /experiences/:id/like` — beğen (idempotent)
-- [ ] `POST /experiences/:id/save` — itinerary klon → saved trips
-- [ ] `schemas/experiences.py` — Pydantic modelleri
+- [x] `POST /experiences` — blog yayımla (trip_id + user_id bağlı)
+- [x] `GET /experiences?city={city}&tags={tags}` — feed listele, filtrele
+- [x] `GET /experiences/{id}` — yazı detayı
+- [x] `POST /experiences/:id/like` — beğen (idempotent)
+- [x] `POST /experiences/:id/save` — itinerary klon → saved trips
+- [x] `schemas/experiences.py` — Pydantic modelleri
+- [x] `dependencies.py` — `get_optional_user` dependency eklendi (feed/detay için opsiyonel auth)
 
 ### Frontend Tasks
-- [ ] Share Experience tab / sayfası — feed listesi
-- [ ] Şehir / ilgi alanı filtre chips
-- [ ] Blog yazısı okuma ekranı — medya, like/save butonları
-- [ ] "Share Experience" buton → yazı oluşturma formu (profile/my-trips'ten)
-- [ ] Blog yazma editor (markdown veya rich text)
-- [ ] Like animasyonu + save feedback
-- [ ] Profile'da "Saved Trips" bölümü (cloned itinerary'ler)
+- [x] Share Experience tab / sayfası — feed listesi (`/experiences`)
+- [x] Şehir / ilgi alanı filtre chips (şehir arama + popular city + tag chip'leri)
+- [x] Blog yazısı okuma ekranı — paragraf render, like/save butonları (`/experiences/[id]`)
+- [x] "Share Experience" buton → yazı oluşturma formu (`/planner/[id]` ve `/my-trips`'ten)
+- [x] Blog yazma editor — textarea + Preview toggle (`/experiences/new`)
+- [x] Like animasyonu + save feedback (optimistic update, kalp animasyonu, toast)
+- [x] Profile'da "Saved Trips" bölümü (cloned itinerary'ler)
+- [x] `ExperienceCard` bileşeni — `components/cards/experience-card.tsx`
+- [x] BottomTabBar'a "Stories" sekmesi + TopNav'a "Experiences" linki eklendi
+- [x] `middleware.ts` — `/experiences/new` korumalı rotaya eklendi
 
 ### DB/Schema Tasks
-- [ ] `experiences` tablosu + RLS (migration `0003`)
-- [ ] `experience_likes` tablosu (unique constraint)
-- [ ] `trips.is_cloned`, `trips.cloned_from` alanları
+- [x] `experiences` tablosu + RLS (migration `0006`)
+- [x] `experience_likes` tablosu (composite PK unique constraint)
+- [x] `trips.is_cloned`, `trips.cloned_from` alanları (migration `0005`'te tamamlandı)
 
 ### Kabul Kriterleri
-- [ ] Blog yazısı `trip_id`'ye bağlı oluşturulabilir
-- [ ] Feed şehir/ilgi alanına göre filtrelenir
-- [ ] Like idempotent — iki kez tıklayınca geri alınır
-- [ ] Save → klonlanan trip, kullanıcının "Saved Trips"inde görünür
-- [ ] Başkasının yazısını düzenleyemez (RLS)
+- [x] Blog yazısı `trip_id`'ye bağlı oluşturulabilir
+- [x] Feed şehir/ilgi alanına göre filtrelenir
+- [x] Like idempotent — iki kez tıklayınca geri alınır
+- [x] Save → klonlanan trip, kullanıcının "Saved Trips"inde görünür
+- [x] Başkasının yazısını düzenleyemez (RLS)
 
 ---
 
@@ -236,7 +240,7 @@
 | `0003_opportunities.sql` | `opportunities` tablosu + RLS + seed data (8 fırsat) | [x] Tamamlandı |
 | `0004_local_helpers.sql` | `profiles` yeni alanları (`is_local_helper`, `helper_region`, `helper_bio`, `helper_availability`) + `local_bookings` tablosu + RLS | [x] Tamamlandı |
 | `0005_trips_clone.sql` | `trips` yeni alanları: `is_cloned`, `cloned_from` | [x] Tamamlandı |
-| `0006_experiences.sql` | `experiences`, `experience_likes` tabloları | [ ] Bekliyor |
+| `0006_experiences.sql` | `experiences`, `experience_likes` tabloları + RLS | [x] Tamamlandı |
 
 ---
 

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-const PROTECTED_PATHS = ["/planner", "/my-trips", "/tickets", "/profile"];
+const PROTECTED_PATHS = ["/planner", "/my-trips", "/tickets", "/profile", "/experiences/new"];
 const AUTH_PATHS = ["/login", "/register"];
 
 export function middleware(request: NextRequest) {

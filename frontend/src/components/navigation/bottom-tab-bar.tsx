@@ -8,13 +8,14 @@ import {
   Luggage,
   UserCircle,
   Compass,
+  BookOpenText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { label: "Discover", href: "/", Icon: Compass, exact: true },
   { label: "Planner", href: "/planner", Icon: CalendarDays, exact: false },
-  { label: "Tickets", href: "/tickets", Icon: Ticket, exact: false },
+  { label: "Stories", href: "/experiences", Icon: BookOpenText, exact: false },
   { label: "My Trips", href: "/my-trips", Icon: Luggage, exact: false },
   { label: "Account", href: "/profile", Icon: UserCircle, exact: false },
 ] as const;

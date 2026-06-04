@@ -168,6 +168,31 @@
 
 ---
 
+### EPIC 5 — Share Experience & Learn From Others
+- **Tarih:** Jun 4, 2026
+- **İçerik:**
+  - `supabase/migrations/0006_experiences.sql` — `experiences` tablosu (title, body, city, tags[], cover_image_url, likes_count) + `experience_likes` composite-PK tablosu; her ikisinde RLS (feed/detay herkese açık, insert/update/delete yalnızca kendi kaydı)
+  - `backend/schemas/experiences.py` — `CreateExperienceRequest`, `ExperienceResponse`, `LikeResponse` Pydantic modelleri
+  - `backend/dependencies.py` — `get_optional_user` dependency eklendi (token olmadığında `None` döndürür, 401 fırlatmaz)
+  - `backend/routers/experiences.py` — 5 endpoint: `GET /experiences` (feed + city/tags filtre + opsiyonel auth), `POST /experiences` (oluştur), `GET /experiences/{id}` (detay + is_liked), `POST /experiences/{id}/like` (toggle idempotent), `POST /experiences/{id}/save` (trip klonla)
+  - `backend/app.py` — `experiences` router kaydedildi
+  - `frontend/src/components/cards/experience-card.tsx` — cover image, city badge, tag chip'leri, likes sayacı, tarih; `index.ts`'e eklendi
+  - `frontend/src/app/experiences/page.tsx` — public feed; şehir arama + popular city chip'leri + tag chip'leri; `ExperienceCard` grid; boş/hata/yükleme durumları; "Share Experience" CTA
+  - `frontend/src/app/experiences/[id]/page.tsx` — blog detay; paragraf render (`\n\n` split); optimistic like toggle + kalp animasyonu; "Save Itinerary" butonu (klonlama) + toast feedback; 401 → `/login` yönlendirme
+  - `frontend/src/app/experiences/new/page.tsx` — yazı oluşturma formu; title, city, linked trip dropdown (`?trip_id=` prefill), cover_image_url, tag yönetimi (suggested + custom), write/preview toggle textarea editor; submit → `/experiences/{id}` yönlendirme
+  - `frontend/src/app/profile/page.tsx` — "Saved Trips" bölümü eklendi; `GET /trips` sonucunda `is_cloned === true` olanlar listelenir
+  - `frontend/src/app/planner/[id]/page.tsx` — "Share Experience" butonu hero aksiyonlarına eklendi (`/experiences/new?trip_id={id}`)
+  - `frontend/src/app/my-trips/page.tsx` — klonlanmamış her trip kartı altına "Share Experience" linki eklendi
+  - `frontend/src/components/navigation/bottom-tab-bar.tsx` — "Stories" sekmesi eklendi (`BookOpenText` ikonu, `/experiences`)
+  - `frontend/src/components/navigation/top-nav.tsx` — desktop nav'a "Experiences" linki eklendi
+  - `frontend/src/middleware.ts` — `/experiences/new` korumalı rotalar listesine eklendi
+- **Karar:** Markdown editör için TipTap/MDX gibi ek kütüphane eklenmedi; textarea + `white-space: pre-wrap` + paragraph split yeterli bulundu (sıfır ekstra bağımlılık)
+- **Karar:** Feed ve detay sayfaları public (auth yok); yalnızca like/save/create korumalı — `get_optional_user` dependency ile sağlandı
+- **Karar:** `experience_likes` composite PK ile idempotent toggle: satır varsa DELETE, yoksa INSERT; her işlemde `likes_count` güncellenir
+- **Hata & Düzeltme:** Bkz. Hatalar tablosu — `maybeSingle()` ve `maybe_single().execute() → None` hataları
+
+---
+
 ### EPIC 6 — Local Help (Yerel Rehberlik)
 - **Tarih:** Jun 3, 2026
 - **İçerik:**
@@ -197,27 +222,14 @@ _(Şu an aktif devam eden iş yok)_
 
 ## Bekleyen İşler
 
-### `[ ]` DB Migration 0006 — Experiences Tabloları
-- `experiences` + `experience_likes` tabloları
-
----
-
-### `[ ]` EPIC 5 — Share Experience & Learn From Others
-- [ ] `POST /experiences` — blog yayımla
-- [ ] `GET /experiences?city=&tags=` — feed
-- [ ] `POST /experiences/:id/like` — beğen (idempotent)
-- [ ] `POST /experiences/:id/save` — itinerary klon
-- [ ] Frontend: Share Experience tab, feed listesi, şehir/ilgi filtresi
-- [ ] Frontend: Blog yazısı okuma ekranı (like + save CTA)
-- [ ] Frontend: Blog yazma formu (profile/my-trips'ten tetiklenir)
-- [ ] Frontend: Profile'da "Saved Trips" bölümü
+_(Şu an bekleyen epic yok)_
 
 ---
 
 ## Hatalar & Notlar
 
-> Bu bölüme geliştirme sırasında karşılaşılan hatalar, alınan kararlar ve önemli notlar eklenecek.
-
 | Tarih | Bileşen | Açıklama | Çözüm |
 |---|---|---|---|
 | Jun 3, 2026 | `routers/locals.py` + `planner/[id]/page.tsx` | AI üretimi `local_activity` slotundaki gerçek adres metni (`Mühlenstr. 3-100`) `helper_id` olarak DB'ye gönderildi → Postgres UUID parse hatası (500) | Frontend'de `parseHelperFromActivity` yalnızca `helper_id:` prefiksi olan slotları helper olarak işliyor; backend'de UUID format guard clause eklendi (400 döndürür) |
+| Jun 4, 2026 | `routers/experiences.py` | `maybeSingle()` camelCase metod adı kullanıldı → `AttributeError` (500) | supabase-py async client snake_case kullanır; tüm çağrılar `maybe_single()` olarak düzeltildi |
+| Jun 4, 2026 | `routers/experiences.py` | `maybe_single().execute()` satır bulunamadığında `None` döndürüyor (`.data = None` olan bir nesne değil); `.data` erişimi `AttributeError` verdi | `_data(result)` yardımcı fonksiyonu eklendi: `result is None` ise `None` döndürür; tüm `maybe_single` sonuçları bu fonksiyondan geçirildi |

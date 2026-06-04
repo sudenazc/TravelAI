@@ -7,6 +7,7 @@ import { NavAuthSection } from "./nav-auth-section";
 
 const NAV_LINKS = [
   { label: "Planner", href: "/planner" },
+  { label: "Experiences", href: "/experiences" },
   { label: "Tickets", href: "/tickets" },
   { label: "My Trips", href: "/my-trips" },
 ] as const;

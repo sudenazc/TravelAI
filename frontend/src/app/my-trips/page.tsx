@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Plane } from "lucide-react";
+import { Plus, Plane, PenLine } from "lucide-react";
 import { TopNav } from "@/components/navigation";
 import { MyTripCard } from "@/components/cards";
 import { http } from "@/lib/http";
@@ -13,6 +13,7 @@ interface TripSummary {
   origin: string;
   duration_days: number | null;
   total_budget_est: number | null;
+  is_cloned?: boolean;
   itinerary_data: {
     accommodation_summary?: string;
   };
@@ -66,17 +67,27 @@ export default function MyTripsPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {trips.map((trip) => (
-              <MyTripCard
-                key={trip.id}
-                id={trip.id}
-                title={trip.destination}
-                destination={`${trip.origin} → ${trip.destination}`}
-                accommodation={trip.itinerary_data?.accommodation_summary?.slice(0, 60)}
-                durationDays={trip.duration_days ?? undefined}
-                budget={trip.total_budget_est ?? undefined}
-                currency="USD"
-                status="completed"
-              />
+              <div key={trip.id} className="flex flex-col gap-1.5">
+                <MyTripCard
+                  id={trip.id}
+                  title={trip.destination}
+                  destination={`${trip.origin} → ${trip.destination}`}
+                  accommodation={trip.itinerary_data?.accommodation_summary?.slice(0, 60)}
+                  durationDays={trip.duration_days ?? undefined}
+                  budget={trip.total_budget_est ?? undefined}
+                  currency="USD"
+                  status="completed"
+                />
+                {!trip.is_cloned && (
+                  <Link
+                    href={`/experiences/new?trip_id=${trip.id}`}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 h-8 text-xs font-semibold text-neutral-500 transition-all hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50"
+                  >
+                    <PenLine className="size-3" strokeWidth={2} />
+                    Share Experience
+                  </Link>
+                )}
+              </div>
             ))}
 
             <AddTripCard />

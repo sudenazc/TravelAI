@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-from routers import auth, locals, opportunities, tickets, trips, users
+from routers import auth, experiences, locals, opportunities, tickets, trips, users
 
 
 @asynccontextmanager
@@ -46,6 +46,7 @@ app.include_router(trips.router)
 app.include_router(tickets.router)
 app.include_router(opportunities.router)
 app.include_router(locals.router)
+app.include_router(experiences.router)
 
 
 @app.get("/health", tags=["Health"])

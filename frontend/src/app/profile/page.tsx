@@ -21,6 +21,7 @@ import {
   Clock,
   FileText,
   BookOpen,
+  Bookmark,
 } from "lucide-react";
 import { TopNav } from "@/components/navigation";
 import { BottomTabBar } from "@/components/navigation/bottom-tab-bar";
@@ -49,6 +50,12 @@ interface UserResponse {
 interface TripSummary {
   id: string;
   destination: string;
+  origin: string;
+  duration_days: number | null;
+  total_budget_est: number | null;
+  is_cloned?: boolean;
+  cloned_from?: string | null;
+  created_at: string;
 }
 
 interface BookingItem {
@@ -72,6 +79,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [tripsCount, setTripsCount] = useState<number>(0);
   const [ticketsCount, setTicketsCount] = useState<number>(0);
+  const [savedTrips, setSavedTrips] = useState<TripSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +123,8 @@ export default function ProfilePage() {
       ]);
       const p = res.data;
       setProfile(p);
-      setTripsCount(trips.length);
+      setTripsCount(trips.filter((t) => !t.is_cloned).length);
+      setSavedTrips(trips.filter((t) => t.is_cloned));
       // Sync helper form state from profile
       setHelperToggle(p.is_local_helper ?? false);
       setHelperRegion(p.helper_region ?? "");
@@ -635,6 +644,67 @@ export default function ProfilePage() {
                     </p>
                   </div>
                   <BookingStatusBadge status={b.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* ── Saved Trips ───────────────────────────────────── */}
+        <section className="mb-4 rounded-2xl border border-neutral-100 bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-sky-100">
+                <Bookmark className="size-4 text-sky-600" strokeWidth={1.75} />
+              </div>
+              <h2 className="font-display text-base font-semibold text-neutral-900">
+                Saved Trips
+              </h2>
+            </div>
+            {savedTrips.length > 0 && (
+              <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-700">
+                {savedTrips.length}
+              </span>
+            )}
+          </div>
+
+          {savedTrips.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-5 py-8 text-center">
+              <Bookmark className="size-8 text-neutral-300" strokeWidth={1.5} />
+              <p className="text-sm text-neutral-400">
+                Save itineraries from other travellers&apos; experiences.
+              </p>
+              <Link
+                href="/experiences"
+                className="mt-1 text-sm font-semibold text-sky-600 hover:text-sky-700 transition-colors"
+              >
+                Browse experiences →
+              </Link>
+            </div>
+          ) : (
+            <ul className="divide-y divide-neutral-100">
+              {savedTrips.map((trip) => (
+                <li key={trip.id}>
+                  <Link
+                    href={`/planner/${trip.id}`}
+                    className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-sky-50 group"
+                  >
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                      <Plane className="size-4" strokeWidth={1.75} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-neutral-800 truncate group-hover:text-sky-700">
+                        {trip.origin} → {trip.destination}
+                      </p>
+                      <p className="text-[11px] text-neutral-400">
+                        {trip.duration_days != null ? `${trip.duration_days} days` : ""}
+                        {trip.total_budget_est != null
+                          ? ` · $${trip.total_budget_est.toLocaleString()}`
+                          : ""}
+                      </p>
+                    </div>
+                    <ChevronRight className="size-4 text-neutral-300 group-hover:text-sky-400 transition-colors" strokeWidth={1.75} />
+                  </Link>
                 </li>
               ))}
             </ul>
