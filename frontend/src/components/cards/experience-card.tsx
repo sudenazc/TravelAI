@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Heart, MapPin, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -44,10 +45,11 @@ export function ExperienceCard({
       {/* Cover image */}
       <div className="relative h-40 w-full bg-gradient-to-br from-sky-100 to-sky-200 overflow-hidden">
         {cover_image_url ? (
-          <img
+          <Image
+            fill
             src={cover_image_url}
             alt={title}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">

@@ -76,9 +76,9 @@ export function RegisterForm() {
     e.preventDefault();
 
     const valid =
-      validateEmail(email) &
-      validatePassword(password) &
-      validateFullName(fullName) &
+      validateEmail(email) &&
+      validatePassword(password) &&
+      validateFullName(fullName) &&
       validateUniversity(universityName);
     if (!valid) return;
 

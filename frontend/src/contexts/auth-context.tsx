@@ -12,7 +12,6 @@ import { useRouter } from "next/navigation";
 import {
   clearTokens,
   getAccessToken,
-  getRefreshToken,
   setTokens,
   type TokenPair,
 } from "@/lib/auth";

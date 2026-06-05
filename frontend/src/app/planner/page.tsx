@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   MapPin,
   Calendar,
@@ -542,11 +543,12 @@ export default function PlannerPage() {
                   {/* Scrollable content */}
                   <div className="flex-1 overflow-y-auto">
                     {/* Hero image */}
-                    <div className="relative mx-4 mt-4 overflow-hidden rounded-2xl">
-                      <img
-                        src={`https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=1200&q=80`}
+                    <div className="relative mx-4 mt-4 h-40 overflow-hidden rounded-2xl lg:h-52">
+                      <Image
+                        fill
+                        src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=1200&q=80"
                         alt={`Day ${activeDay} — ${currentDay.title}`}
-                        className="h-40 w-full object-cover lg:h-52"
+                        className="object-cover"
                       />
                       <div
                         className="absolute inset-0"

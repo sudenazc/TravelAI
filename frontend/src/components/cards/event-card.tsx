@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { CalendarDays, MapPin, Clock, Users } from "lucide-react";
+import { CalendarDays, MapPin, Clock } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";

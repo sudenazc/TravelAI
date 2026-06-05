@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowLeft,
   Heart,
@@ -163,11 +164,12 @@ export default function ExperienceDetailPage() {
 
         {/* Cover image */}
         {experience.cover_image_url ? (
-          <div className="mb-6 h-64 w-full overflow-hidden rounded-2xl bg-neutral-200 md:h-80">
-            <img
+          <div className="relative mb-6 h-64 w-full overflow-hidden rounded-2xl bg-neutral-200 md:h-80">
+            <Image
+              fill
               src={experience.cover_image_url}
               alt={experience.title}
-              className="h-full w-full object-cover"
+              className="object-cover"
             />
           </div>
         ) : (

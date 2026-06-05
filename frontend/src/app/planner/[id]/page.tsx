@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowLeft,
   Calendar,
@@ -196,7 +197,7 @@ function parseHelperFromActivity(activity: ActivityItem): LocalHelper | null {
 
 function ActivityCard({
   activity,
-  tripId,
+  tripId: _tripId,
   onConnectHelper,
 }: {
   activity: ActivityItem;
@@ -523,10 +524,11 @@ export default function TripDetailPage() {
 
       {/* ── Hero ── */}
       <div className="relative overflow-hidden bg-neutral-900">
-        <img
+        <Image
+          fill
           src="https://images.unsplash.com/photo-1488085061387-422e29b40080?w=1600&q=80"
           alt={itinerary.destination}
-          className="absolute inset-0 h-full w-full object-cover opacity-40"
+          className="object-cover opacity-40"
         />
         <div
           className="absolute inset-0"
