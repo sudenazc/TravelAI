@@ -78,7 +78,6 @@
 - [x] 8 parametre tamamlanmadan Thinking Mode tetiklenmez
 - [x] LLM her zaman geçerli JSON döndürür (repair stratejisi ile güçlendirildi)
 - [x] Itinerary'de Company Opportunities ve Local Helper slotları görünür
-- [ ] Enriched prompt üretimi test edilir (unit test) — Faz 2'ye bırakıldı
 
 ---
 
@@ -113,12 +112,10 @@
 
 ## EPIC 4 — Company Opportunities (Genişletilmiş Askıda Bilet)
 
-**Durum:** `[~]` Core opportunities tamamlandı · `[ ]` Push notification + AI enrichment Faz 2'ye bırakıldı
+**Durum:** `[x]` Tamamlandı (core scope)
 
 ### User Stories
 - **US.4.1:** Bir kullanıcı olarak, seyahat ettiğim şehirdeki ücretsiz/indirimli fırsatları görüp claim etmek istiyorum.
-- **US.4.2:** Last-minute fırsatlar için push notification almak istiyorum.
-- **US.4.3:** AI planner fırsatları otomatik olarak itinerary'me eklesin.
 
 ### Backend Tasks
 - [x] `GET /tickets` — mevcut ticket listeleme
@@ -127,8 +124,6 @@
 - [x] `GET /opportunities?city={city}&category={category}` — filtreleme (`ilike` city, exact category)
 - [x] `POST /opportunities/claim/{id}` — concurrency lock ile atomik claim (`claimed_by IS NULL` koşulu)
 - [x] `GET /opportunities/wallet` — kullanıcının claim'leri + `claim_code`
-- [ ] Push notification altyapısı (last-minute deals için, Faz 2)
-- [ ] AI planner enrichment: opportunities → itinerary slot injection
 
 ### Frontend Tasks
 - [x] `/tickets` — Ticket Market + Opportunities segment switcher
@@ -148,7 +143,6 @@
 - [x] Fırsatlar kategoriye ve şehre göre filtrelenebilir
 - [x] Claim edilince `status` anlık güncellenir (ikinci claim başarısız olur — 409)
 - [x] Claim sonrası `claim_code` referansı Wallet'ta görünür
-- [ ] AI itinerary'de uygun fırsatlar highlight edilmiş gösterilir (Faz 2)
 
 ---
 
@@ -197,7 +191,7 @@
 
 ## EPIC 6 — Local Help (Yerel Rehberlik)
 
-**Durum:** `[x]` Tamamlandı (Jun 3, 2026) · `[ ]` Bildirim + ödeme Faz 2'ye bırakıldı
+**Durum:** `[x]` Tamamlandı (Jun 3, 2026)
 
 ### User Stories
 - **US.6.1:** Bir kullanıcı olarak, kendi şehrimde lokal rehber olarak kaydolup gelen öğrencilerle eşleşmek istiyorum.
@@ -216,17 +210,16 @@
 - [x] Helper detay formu — region input, bio textarea, availability input
 - [x] `components/locals/local-helper-card.tsx` — avatar, bio, meta + "Connect" CTA
 - [x] `components/locals/helper-modal.tsx` — detay modal + booking formu + success state
-- [x] Booking onay ekranı — modal success state (her iki tarafa bildirim Faz 2)
+- [x] Booking onay ekranı — modal success state
 - [x] Profile'da "My Bookings" bölümü — pending/accepted/declined badge'leri ile liste
 
 ### DB/Schema Tasks
 - [x] `profiles` tablosuna alanlar eklendi: `is_local_helper`, `helper_region`, `helper_bio`, `helper_availability` (migration `0004`)
-- [x] `local_bookings` tablosu oluşturuldu — temel booking akışı (ödeme kolonları Faz 2'ye bırakıldı)
+- [x] `local_bookings` tablosu oluşturuldu — temel booking akışı
 
 ### Kabul Kriterleri
 - [x] Toggle açıldıktan sonra helper o bölge için AI planner'da görünür
 - [x] AI itinerary'e uygun helper'ı otomatik olarak slot olarak ekler
-- [ ] Booking → her iki tarafa bildirim gönderilir (Faz 2 — push notification altyapısı)
 - [x] Booking profil sayfasında "My Bookings" listesinde gösterilir
 
 ---
@@ -292,13 +285,31 @@ Health
 
 ---
 
-## Out of Scope (Faz 3+)
+## MVP Scope Dışı
 
-- Travel Buddy eşleşmesi
-- Acil Durum SOS
-- Lokal Chatbot
-- In-app ödeme (Stripe)
-- B2B Sponsor Panel
-- Oyunlaştırma (puanlar, rozetler)
-- iOS native app
-- Client code generator (OpenAPI → TS/Swift)
+> Aşağıdaki özellikler tamamlanmamış olup MVP kapsamına alınmamıştır.
+
+### Faz 2 — Yakın Vade
+
+EPIC'lerde `[ ]` olarak işaretlenmiş, ertelenen maddeler.
+
+| Özellik | İlgili EPIC | Kapsam Dışı Nedeni |
+|---|---|---|
+| Push notification altyapısı (last-minute deals) | EPIC 4 | Service worker + izin yönetimi ayrı bir infra kanalı; MVP çekirdeği için gereksiz karmaşıklık. |
+| AI itinerary → opportunities slot injection | EPIC 4 | LLM çıktısına DB enrichment + render ayrımı gerektirir; mevcut "prompt'a ekle → LLM karar versin" akışı MVP için yeterli. |
+| AI itinerary'de opportunities highlight gösterimi | EPIC 4 | Slot injection tamamlanmadan anlamsız; önceki maddeye bağımlı. |
+| Booking → her iki tarafa bildirim | EPIC 6 | Push notification altyapısına bağımlı; altyapı Faz 2'ye kaydırıldı. |
+| Enriched prompt üretimi unit test | EPIC 2 | Test altyapısı (pytest fixtures, mock LLM) henüz kurulmadı; işlevsel akış çalışıyor, ertelendi. |
+
+### Faz 3+ — Uzak Vade
+
+| Özellik | Kapsam Dışı Nedeni |
+|---|---|
+| Travel Buddy eşleşmesi | Eşleştirme algoritması + kullanıcı güvenliği ayrı ürün kapsamı. |
+| Acil Durum SOS | Acil servis entegrasyonu yasal/teknik sorumluluk gerektirir. |
+| Lokal Chatbot | Gerçek zamanlı NLP (WebSocket + ayrı model) MVP maliyetini aşar. |
+| In-app ödeme (Stripe) | PCI-DSS regülasyonu + webhook altyapısı ayrı sprint gerektirir. |
+| B2B Sponsor Panel | Farklı kullanıcı rolü + admin dashboard; B2C MVP önce doğrulanmalı. |
+| Oyunlaştırma (puanlar, rozetler) | Retention verisi olmadan tasarım erken; MVP sonrası analitikle şekillenecek. |
+| iOS native app | Ayrı codebase (React Native/Swift); web MVP önce doğrulanmalı. |
+| Client code generator (OpenAPI → TS/Swift) | Developer tooling; son kullanıcı değeri yok. |

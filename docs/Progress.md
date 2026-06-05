@@ -132,7 +132,6 @@
   - `frontend/src/components/tickets/wallet-section.tsx` — "My Claimed Opportunities" alt bölümü eklendi; her satırda `claim_code` etiketi
 - **Karar:** Concurrency lock için Supabase service-role UPDATE + `claimed_by IS NULL` koşulu kullanıldı; ayrı transaction/lock mekanizması gerekmedi
 - **Karar:** QR kod için harici kütüphane yerine monospace `claim_code` metin kutusu tercih edildi (sıfır bağımlılık)
-- **Kapsam dışı bırakılan (Faz 2):** Push notification altyapısı, AI planner → opportunities enrichment
 
 ---
 
@@ -209,7 +208,6 @@
   - `frontend/src/app/planner/[id]/page.tsx` — `parseHelperFromActivity()` ile `local_activity` slotları `LocalHelperCard` olarak render edilir; "Connect" → `HelperModal`
 - **Karar:** `local_bookings` tablosu ödeme kolonları olmadan oluşturuldu; Stripe entegrasyonu Faz 2'ye bırakıldı
 - **Karar:** Helper kimliği `ActivityItem.location` alanına `helper_id:<uuid>` prefiksiyle gömüldü; bu sayede AI prompt'u değiştirmeden parse edilebiliyor
-- **Kapsam dışı bırakılan (Faz 2):** Push notification (booking kabul/ret bildirimleri), ödeme entegrasyonu
 - **Hata & Düzeltme:** `POST /locals/book/{helper_id}` endpoint'ine AI üretimi gerçek adres metni (`Mühlenstr. 3-100`) gönderilince Postgres UUID parse hatası oluştu. İki katmanlı düzeltme: (1) `parseHelperFromActivity` — `helper_id:` prefiksi olmayan `local_activity` slotlarını artık helper olarak işlemiyor; (2) `routers/locals.py` — `book_local_helper` endpoint'ine DB sorgusundan önce UUID format validasyonu eklendi
 
 ---
@@ -220,9 +218,21 @@ _(Şu an aktif devam eden iş yok)_
 
 ---
 
-## Bekleyen İşler
+## MVP Scope Dışı Bırakılan İşler
 
-_(Şu an bekleyen epic yok)_
+Tüm EPIC'lerde `[ ]` kalan maddeler ve uzak vade özellikleri `docs/Plan.md → MVP Scope Dışı` bölümüne taşınmıştır.
+
+**Faz 2 (ertelenen):**
+
+| Özellik | Neden Ertelendi |
+|---|---|
+| Push notification altyapısı | Service worker + izin yönetimi ayrı infra; MVP için gereksiz karmaşıklık |
+| AI → opportunities slot injection | Mevcut prompt-enrichment akışı MVP için yeterli; post-processing Faz 2 |
+| AI itinerary'de opportunities highlight | Slot injection'a bağımlı; önceki madde tamamlanmadan anlamsız |
+| Booking bildirimleri (Local Help) | Push altyapısına bağımlı |
+| Enriched prompt unit test | Test altyapısı kurulmadı; işlevsel akış çalışıyor |
+
+**Faz 3+ (uzak vade):** Travel Buddy, SOS, Lokal Chatbot, Stripe, B2B Panel, Oyunlaştırma, iOS app, OpenAPI codegen — bkz. `Plan.md`.
 
 ---
 
