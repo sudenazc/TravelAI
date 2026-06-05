@@ -20,30 +20,124 @@ router = APIRouter(prefix="/trips", tags=["Trips"])
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Ordered by JSON-mode reliability. Each model is tried in sequence; first valid
-# JSON response wins. All support `response_format: json_object` reliably.
-FREE_MODELS = [
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
-    "google/gemma-3-12b-it:free",
+# Ordered free-model fallback list. We pass this as OpenRouter's `models` param so
+# OpenRouter itself falls back to the next entry when one errors or is rate-limited
+# (429) — all within a single HTTP request.
+#
+# Order matters and is tuned for the free tier's two failure modes:
+#  1. SPEED: lead with a small, fast model. Big free models (e.g. 120B reasoning)
+#     can take minutes and blow the per-request timeout.
+#  2. PROVIDER SPREAD: the next entries sit on different upstream providers, so a
+#     rate-limit on one provider doesn't sink every fallback. `openrouter/free`
+#     is last as a catch-all across the rest of the free pool.
+#
+# Only models advertising `structured_outputs` belong here, since we send a strict
+# `json_schema` response format. Verify the current pool with:
+#   curl https://openrouter.ai/api/v1/models  (filter pricing==0 + structured_outputs)
+FALLBACK_MODELS = [
+    "nvidia/nemotron-nano-9b-v2:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "openrouter/free",
 ]
+
+# Each attempt is one HTTP request that internally walks FALLBACK_MODELS. We retry
+# a few times because free models can return empty content or all be rate-limited.
+MAX_ATTEMPTS = 3
 
 # Per-request timeout (seconds). Free models can be slow; 55s covers most queues.
 MODEL_TIMEOUT = httpx.Timeout(connect=8.0, read=55.0, write=8.0, pool=5.0)
 
 # Hard cap for the entire _call_openrouter coroutine (seconds).
-# 3 models × 55s each + repair + overhead ≈ 200s worst-case.
+# 3 attempts × 55s each + repair + overhead ≈ 200s worst-case.
 TOTAL_AI_TIMEOUT = 200.0
 
-# Keep token output small so free models respond faster.
-# A 7-day itinerary with full activity descriptions fits well within 2500 tokens.
-MAX_TOKENS = 2500
+# Reasoning-capable free models count their chain-of-thought against this budget,
+# so it must be generous enough that the actual JSON answer still fits. Too small
+# (the old 2500) caused empty/truncated responses. Output is free, so be liberal.
+MAX_TOKENS = 8000
 
 REPAIR_SYSTEM = (
     "You are a JSON repair assistant. "
     "Return ONLY the corrected JSON object. "
     "Do NOT add text, markdown, code fences, or any explanation."
 )
+
+# Strict JSON Schema sent to OpenRouter as `response_format`. Strict mode requires
+# every property listed in `required` and `additionalProperties: false` on every
+# object. This mirrors `ItineraryData` in schemas/trips.py — keep them in sync.
+ACTIVITY_TYPES = ["hotel", "food", "transport", "activity", "local_activity"]
+
+ITINERARY_JSON_SCHEMA = {
+    "name": "itinerary",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "destination": {"type": "string"},
+            "origin": {"type": "string"},
+            "duration_days": {"type": "integer"},
+            "total_budget_est": {"type": "number"},
+            "currency": {"type": "string"},
+            "visa_info": {"type": "string"},
+            "accommodation_summary": {"type": "string"},
+            "transport_tips": {"type": "string"},
+            "days": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "day": {"type": "integer"},
+                        "title": {"type": "string"},
+                        "activities": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "time": {"type": "string"},
+                                    "name": {"type": "string"},
+                                    "type": {"type": "string", "enum": ACTIVITY_TYPES},
+                                    "description": {"type": "string"},
+                                    "cost_est": {"type": "number"},
+                                    "location": {"type": ["string", "null"]},
+                                },
+                                "required": [
+                                    "time",
+                                    "name",
+                                    "type",
+                                    "description",
+                                    "cost_est",
+                                    "location",
+                                ],
+                            },
+                        },
+                    },
+                    "required": ["day", "title", "activities"],
+                },
+            },
+        },
+        "required": [
+            "destination",
+            "origin",
+            "duration_days",
+            "total_budget_est",
+            "currency",
+            "visa_info",
+            "accommodation_summary",
+            "transport_tips",
+            "days",
+        ],
+    },
+}
+
+RESPONSE_FORMAT = {"type": "json_schema", "json_schema": ITINERARY_JSON_SCHEMA}
+
+# Forces the router to only pick free models that support the parameters we send
+# (i.e. structured outputs via json_schema). Without this, the router may select
+# a reasoning model that ignores the schema and returns prose.
+PROVIDER_PREFS = {"require_parameters": True}
 
 
 def _extract_json_object(text: str) -> str:
@@ -177,9 +271,44 @@ def _build_user_prompt(req: GenerateTripRequest, opportunities: list[dict] | Non
     return prompt
 
 
+# Upper bound on a single rate-limit wait (seconds). Free models report values
+# around 10–15s; anything larger would risk the overall TOTAL_AI_TIMEOUT budget.
+MAX_RETRY_WAIT = 15.0
+
+
+def _parse_retry_after(response: httpx.Response) -> float:
+    """Read the Retry-After hint from a 429 response, clamped to MAX_RETRY_WAIT."""
+    header = response.headers.get("Retry-After") or response.headers.get("retry-after")
+    if header:
+        try:
+            return min(float(header), MAX_RETRY_WAIT)
+        except ValueError:
+            pass
+    try:
+        meta = response.json().get("error", {}).get("metadata", {})
+        secs = meta.get("retry_after_seconds") or meta.get("retry_after_seconds_raw")
+        if secs is not None:
+            return min(float(secs), MAX_RETRY_WAIT)
+    except Exception:
+        pass
+    return 0.0
+
+
+def _extract_content(message: dict) -> str | None:
+    """
+    Return the assistant's JSON content, or None if the model only produced
+    reasoning prose. We deliberately never fall back to the `reasoning` field —
+    it holds chain-of-thought text ("Okay, let's tackle this..."), not JSON, and
+    feeding it to the parser is what produced the original `json_invalid` error.
+    """
+    content = message.get("content")
+    if content and content.strip():
+        return content.strip()
+    return None
+
+
 async def _repair_call(
     client: httpx.AsyncClient,
-    model: str,
     raw_bad: str,
     exc_msg: str,
     headers: dict,
@@ -197,11 +326,12 @@ async def _repair_call(
         },
     ]
     payload = {
-        "model": model,
+        "models": FALLBACK_MODELS,
         "messages": repair_msgs,
         "temperature": 0.2,
         "max_tokens": MAX_TOKENS,
-        "response_format": {"type": "json_object"},
+        "response_format": RESPONSE_FORMAT,
+        "provider": PROVIDER_PREFS,
     }
     try:
         resp = await client.post(
@@ -209,62 +339,72 @@ async def _repair_call(
         )
         if resp.status_code != 200:
             return None
-        data = resp.json()
-        content = data["choices"][0]["message"].get("content", "")
-        if not content or len(content.strip()) < 50:
+        content = _extract_content(resp.json()["choices"][0]["message"])
+        if not content:
             return None
-        content = _extract_json_object(content.strip())
-        if not content.startswith("{"):
+        extracted = _extract_json_object(content)
+        if not extracted.startswith("{"):
             return None
-        return ItineraryData.model_validate_json(content)
+        return ItineraryData.model_validate_json(extracted)
     except Exception as exc:
-        logger.debug("Repair call failed for %s: %s", model, exc)
+        logger.debug("Repair call failed: %s", exc)
         return None
 
 
-async def _try_model(
+async def _try_generate(
     client: httpx.AsyncClient,
-    model: str,
     messages: list[dict],
     headers: dict,
+    attempt: int,
 ) -> ItineraryData | None:
     """
-    Call a single model and return a parsed ItineraryData, or None on any failure.
-    Returns None (instead of raising) so the caller can try the next model.
+    Run one generation attempt against the free router and return a parsed
+    ItineraryData, or None on any failure so the caller can retry.
     """
     payload = {
-        "model": model,
+        "models": FALLBACK_MODELS,
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": MAX_TOKENS,
-        "response_format": {"type": "json_object"},
+        "response_format": RESPONSE_FORMAT,
+        "provider": PROVIDER_PREFS,
     }
     try:
         response = await client.post(
             OPENROUTER_API_URL, json=payload, headers=headers, timeout=MODEL_TIMEOUT
         )
     except httpx.TimeoutException:
-        logger.warning("Model %s timed out; trying next.", model)
+        logger.warning("Attempt %s timed out; retrying.", attempt)
         return None
 
     if response.status_code != 200:
-        logger.warning("Model %s returned HTTP %s; trying next.", model, response.status_code)
+        logger.warning(
+            "Attempt %s returned HTTP %s: %s", attempt, response.status_code, response.text[:200]
+        )
+        # All free models rate-limited upstream: honour Retry-After before the next
+        # attempt instead of burning retries instantly. Capped so we never blow the
+        # overall TOTAL_AI_TIMEOUT budget.
+        if response.status_code == 429:
+            retry_after = _parse_retry_after(response)
+            if retry_after > 0:
+                logger.info("Rate-limited; waiting %.1fs before retry.", retry_after)
+                await asyncio.sleep(retry_after)
         return None
 
     data = response.json()
-    message = data["choices"][0]["message"]
-    raw_content: str | None = message.get("content") or message.get("reasoning")
+    selected_model = data.get("model", "unknown")
+    content = _extract_content(data["choices"][0]["message"])
 
-    if not raw_content or len(raw_content.strip()) < 50:
-        logger.warning("Model %s returned empty/truncated content; trying next.", model)
+    if not content or len(content) < 50:
+        logger.warning("Attempt %s (%s) returned no JSON content; retrying.", attempt, selected_model)
         return None
 
-    extracted = _extract_json_object(raw_content.strip())
-
+    extracted = _extract_json_object(content)
     if not extracted.startswith("{"):
         logger.warning(
-            "Model %s returned prose instead of JSON (starts with %r); trying next.",
-            model,
+            "Attempt %s (%s) returned prose instead of JSON (starts with %r); retrying.",
+            attempt,
+            selected_model,
             extracted[:40],
         )
         return None
@@ -272,12 +412,12 @@ async def _try_model(
     try:
         return ItineraryData.model_validate_json(extracted)
     except Exception as exc:
-        logger.warning("Model %s parse failed (%s). Attempting repair.", model, exc)
-        repaired = await _repair_call(client, model, extracted, str(exc), headers)
+        logger.warning("Attempt %s (%s) parse failed (%s). Attempting repair.", attempt, selected_model, exc)
+        repaired = await _repair_call(client, extracted, str(exc), headers)
         if repaired is not None:
-            logger.info("Repair succeeded for model %s.", model)
+            logger.info("Repair succeeded on attempt %s.", attempt)
             return repaired
-        logger.warning("Repair failed for model %s; trying next.", model)
+        logger.warning("Repair failed on attempt %s; retrying.", attempt)
         return None
 
 
@@ -295,16 +435,16 @@ async def _call_openrouter(req: GenerateTripRequest, opportunities: list[dict] |
     ]
 
     async with httpx.AsyncClient() as client:
-        for model in FREE_MODELS:
-            logger.info("Trying model: %s", model)
-            result = await _try_model(client, model, messages, headers)
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            logger.info("Generating itinerary (attempt %s/%s)", attempt, MAX_ATTEMPTS)
+            result = await _try_generate(client, messages, headers, attempt)
             if result is not None:
-                logger.info("Model %s succeeded.", model)
+                logger.info("Itinerary generated successfully on attempt %s.", attempt)
                 return result
 
     raise HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
-        detail="All AI models failed to return valid JSON. Please try again.",
+        detail="AI failed to return a valid itinerary after several attempts. Please try again.",
     )
 
 
