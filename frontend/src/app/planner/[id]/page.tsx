@@ -197,7 +197,6 @@ function parseHelperFromActivity(activity: ActivityItem): LocalHelper | null {
 
 function ActivityCard({
   activity,
-  tripId: _tripId,
   onConnectHelper,
 }: {
   activity: ActivityItem;

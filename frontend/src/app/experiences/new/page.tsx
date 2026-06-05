@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -36,6 +36,14 @@ const SUGGESTED_TAGS = [
 ];
 
 export default function NewExperiencePage() {
+  return (
+    <Suspense>
+      <NewExperienceForm />
+    </Suspense>
+  );
+}
+
+function NewExperienceForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillTripId = searchParams.get("trip_id");
