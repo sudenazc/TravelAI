@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import {
@@ -205,6 +205,14 @@ const ACTIVITY_ICON: Record<ActivityType, string> = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function PlannerPage() {
+  return (
+    <Suspense>
+      <PlannerContent />
+    </Suspense>
+  );
+}
+
+function PlannerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
