@@ -20,15 +20,20 @@ router = APIRouter(prefix="/trips", tags=["Trips"])
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# OpenRouter's built-in free routing — automatically picks the best available free model.
-FREE_MODEL = "openrouter/free"
+# Ordered by JSON-mode reliability. Each model is tried in sequence; first valid
+# JSON response wins. All support `response_format: json_object` reliably.
+FREE_MODELS = [
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+    "google/gemma-3-12b-it:free",
+]
 
 # Per-request timeout (seconds). Free models can be slow; 55s covers most queues.
 MODEL_TIMEOUT = httpx.Timeout(connect=8.0, read=55.0, write=8.0, pool=5.0)
 
 # Hard cap for the entire _call_openrouter coroutine (seconds).
-# primary call (55s) + repair call (55s) + overhead = ~115s worst-case.
-TOTAL_AI_TIMEOUT = 120.0
+# 3 models × 55s each + repair + overhead ≈ 200s worst-case.
+TOTAL_AI_TIMEOUT = 200.0
 
 # Keep token output small so free models respond faster.
 # A 7-day itinerary with full activity descriptions fits well within 2500 tokens.
@@ -179,7 +184,7 @@ async def _repair_call(
     exc_msg: str,
     headers: dict,
 ) -> ItineraryData | None:
-    """Attempt to fix a malformed JSON response using the same model."""
+    """Attempt to fix a structurally close but invalid JSON response."""
     repair_msgs = [
         {"role": "system", "content": REPAIR_SYSTEM},
         {
@@ -209,9 +214,70 @@ async def _repair_call(
         if not content or len(content.strip()) < 50:
             return None
         content = _extract_json_object(content.strip())
+        if not content.startswith("{"):
+            return None
         return ItineraryData.model_validate_json(content)
     except Exception as exc:
         logger.debug("Repair call failed for %s: %s", model, exc)
+        return None
+
+
+async def _try_model(
+    client: httpx.AsyncClient,
+    model: str,
+    messages: list[dict],
+    headers: dict,
+) -> ItineraryData | None:
+    """
+    Call a single model and return a parsed ItineraryData, or None on any failure.
+    Returns None (instead of raising) so the caller can try the next model.
+    """
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": MAX_TOKENS,
+        "response_format": {"type": "json_object"},
+    }
+    try:
+        response = await client.post(
+            OPENROUTER_API_URL, json=payload, headers=headers, timeout=MODEL_TIMEOUT
+        )
+    except httpx.TimeoutException:
+        logger.warning("Model %s timed out; trying next.", model)
+        return None
+
+    if response.status_code != 200:
+        logger.warning("Model %s returned HTTP %s; trying next.", model, response.status_code)
+        return None
+
+    data = response.json()
+    message = data["choices"][0]["message"]
+    raw_content: str | None = message.get("content") or message.get("reasoning")
+
+    if not raw_content or len(raw_content.strip()) < 50:
+        logger.warning("Model %s returned empty/truncated content; trying next.", model)
+        return None
+
+    extracted = _extract_json_object(raw_content.strip())
+
+    if not extracted.startswith("{"):
+        logger.warning(
+            "Model %s returned prose instead of JSON (starts with %r); trying next.",
+            model,
+            extracted[:40],
+        )
+        return None
+
+    try:
+        return ItineraryData.model_validate_json(extracted)
+    except Exception as exc:
+        logger.warning("Model %s parse failed (%s). Attempting repair.", model, exc)
+        repaired = await _repair_call(client, model, extracted, str(exc), headers)
+        if repaired is not None:
+            logger.info("Repair succeeded for model %s.", model)
+            return repaired
+        logger.warning("Repair failed for model %s; trying next.", model)
         return None
 
 
@@ -228,58 +294,18 @@ async def _call_openrouter(req: GenerateTripRequest, opportunities: list[dict] |
         {"role": "user", "content": _build_user_prompt(req, opportunities)},
     ]
 
-    payload = {
-        "model": FREE_MODEL,
-        "messages": messages,
-        "temperature": 0.7,
-        "max_tokens": MAX_TOKENS,
-        "response_format": {"type": "json_object"},
-    }
-
     async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                OPENROUTER_API_URL, json=payload, headers=headers, timeout=MODEL_TIMEOUT
-            )
-        except httpx.TimeoutException:
-            raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail="AI service timed out. Please try again.",
-            )
+        for model in FREE_MODELS:
+            logger.info("Trying model: %s", model)
+            result = await _try_model(client, model, messages, headers)
+            if result is not None:
+                logger.info("Model %s succeeded.", model)
+                return result
 
-        if response.status_code != 200:
-            logger.error("OpenRouter error %s: %s", response.status_code, response.text)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"AI service returned {response.status_code}. Please try again.",
-            )
-
-        data = response.json()
-        message = data["choices"][0]["message"]
-        raw_content: str | None = message.get("content") or message.get("reasoning")
-
-        if not raw_content or len(raw_content.strip()) < 50:
-            logger.error("openrouter/auto returned empty/truncated content: %s", data)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="AI service returned empty content. Please try again.",
-            )
-
-        raw_content = _extract_json_object(raw_content.strip())
-
-        try:
-            return ItineraryData.model_validate_json(raw_content)
-        except Exception as exc:
-            logger.warning("Parse failed (%s). Attempting repair.", exc)
-            repaired = await _repair_call(client, FREE_MODEL, raw_content, str(exc), headers)
-            if repaired is not None:
-                logger.info("Repair succeeded.")
-                return repaired
-            logger.error("Repair failed. Raw:\n%s", raw_content[:400])
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="AI returned malformed JSON. Please try again.",
-            )
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="All AI models failed to return valid JSON. Please try again.",
+    )
 
 
 async def _inject_local_helpers(itinerary: ItineraryData, destination: str, db) -> ItineraryData:
