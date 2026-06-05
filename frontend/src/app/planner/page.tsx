@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import {
   MapPin,
@@ -206,6 +206,7 @@ const ACTIVITY_ICON: Record<ActivityType, string> = {
 
 export default function PlannerPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -216,6 +217,7 @@ export default function PlannerPage() {
   const [activeDay, setActiveDay] = useState(1);
   const [activeTab, setActiveTab] = useState<"chat" | "plan">("chat");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const autoSentRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -250,7 +252,7 @@ export default function PlannerPage() {
     }
   };
 
-  const handleSend = (text: string) => {
+  const handleSend = useCallback((text: string) => {
     const userMsg: Message = { id: `user-${Date.now()}`, role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
 
@@ -299,7 +301,21 @@ export default function PlannerPage() {
         triggerGenerate(updatedParams as GenerateTripParams);
       }, 900);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramStep, collectedParams]);
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (!q || autoSentRef.current) return;
+    const timer = setTimeout(() => {
+      if (autoSentRef.current) return;
+      autoSentRef.current = true;
+      handleSend(q);
+    }, 600);
+    return () => clearTimeout(timer);
+    // handleSend intentionally excluded — captured at step 0 which is what we want
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const currentDay = trip
     ? trip.itinerary_data.days.find((d) => d.day === activeDay) ??
